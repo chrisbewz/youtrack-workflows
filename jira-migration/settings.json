@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "jiraApiToken": {
+      "title": "Jira API Token (Basic Auth)",
+      "description": "Pre-encoded Base64 string for Basic Auth. Compute with btoa('email:api-token') and store the result here.",
+      "type": "string",
+      "format": "secret"
+    }
+  }
+}
