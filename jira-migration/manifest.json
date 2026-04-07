@@ -1,6 +1,6 @@
-﻿{
-  "name" : "jira-sync",
-  "title" : "jira-sync",
+{
+  "name" : "jira-migration",
+  "title" : "jira-migration",
   "version" : "0.0.1",
   "vendor" : {
     "name" : "Christian Celso Bewzenko",
