@@ -4,9 +4,14 @@
   "properties": {
     "jiraApiToken": {
       "title": "Jira API Token (Basic Auth)",
-      "description": "Pre-encoded Base64 string for Basic Auth. Compute with btoa('email:api-token') and store the result here.",
+      "description": "Jira API token with permissions to access issues information through REST API. Generate it at https://id.atlassian.com/manage-profile/security/api-tokens.",
       "type": "string",
       "format": "secret"
+    },
+    "jiraEndpointUrl": {
+      "title": "Jira URL",
+      "description": "Jira instance URL, without the trailing slash",
+      "type": "string"
     }
   }
 }
