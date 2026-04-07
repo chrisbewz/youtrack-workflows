@@ -312,4 +312,145 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   }
 };
 
-module.exports = { performSync };
+// --- NOTIFICATION HELPERS ---
+
+/**
+ * Splits a full webhook URL into base + path and POSTs to it.
+ * All webhook URLs (ntfy, Teams, Slack) follow the same pattern:
+ *   https://host/...long-path.../last-segment
+ * http.Connection requires base URL + relative path as separate arguments.
+ *
+ * @param {string} webhookUrl - Full URL including path.
+ * @param {Object} headers    - Request headers object.
+ * @param {string} body       - Raw request body string.
+ * @returns {Object|null} YouTrack HTTP response object, or null on error.
+ */
+const postToWebhook = (webhookUrl, headers, body) => {
+  const lastSlash = webhookUrl.lastIndexOf('/');
+  const baseUrl = webhookUrl.substring(0, lastSlash);
+  const path = webhookUrl.substring(lastSlash);
+  const connection = new http.Connection(baseUrl, null, 5000);
+  return connection.postSync(path, headers, body);
+};
+
+/**
+ * ntfy.sh — plain text POST with Title header.
+ * Works with ntfy.sh (hosted) and self-hosted ntfy instances.
+ */
+const notifyNtfy = (topicUrl, issueId, collector) => {
+  try {
+    const response = postToWebhook(topicUrl, {
+      'Title': 'Jira Sync: ' + issueId,
+      'Content-Type': 'text/plain; charset=utf-8'
+    }, collector.join('\n'));
+
+    if (!response || response.code < 200 || response.code >= 300) {
+      console.log('[Notify][ntfy] Failed: HTTP ' + (response ? response.code : 'no response'));
+    } else {
+      console.log('[Notify][ntfy] Sent for issue: ' + issueId);
+    }
+  } catch (e) {
+    console.log('[Notify][ntfy] Error: ' + e.message);
+  }
+};
+
+/**
+ * Microsoft Teams — Incoming Webhook using the legacy MessageCard format,
+ * which is universally supported by all Teams incoming webhook connectors.
+ */
+const notifyTeams = (webhookUrl, issueId, collector) => {
+  try {
+    const payload = JSON.stringify({
+      '@type': 'MessageCard',
+      '@context': 'http://schema.org/extensions',
+      'summary': 'Jira Sync: ' + issueId,
+      'themeColor': '0076D7',
+      'sections': [{
+        'activityTitle': 'Jira Sync: ' + issueId,
+        'activityText': collector.join('\n')
+      }]
+    });
+
+    const response = postToWebhook(webhookUrl, {
+      'Content-Type': 'application/json'
+    }, payload);
+
+    if (!response || response.code < 200 || response.code >= 300) {
+      console.log('[Notify][Teams] Failed: HTTP ' + (response ? response.code : 'no response'));
+    } else {
+      console.log('[Notify][Teams] Sent for issue: ' + issueId);
+    }
+  } catch (e) {
+    console.log('[Notify][Teams] Error: ' + e.message);
+  }
+};
+
+/**
+ * Slack — Incoming Webhook using the blocks API for formatted output.
+ */
+const notifySlack = (webhookUrl, issueId, collector) => {
+  try {
+    const payload = JSON.stringify({
+      'blocks': [
+        {
+          'type': 'header',
+          'text': { 'type': 'plain_text', 'text': 'Jira Sync: ' + issueId }
+        },
+        {
+          'type': 'section',
+          'text': { 'type': 'mrkdwn', 'text': '```' + collector.join('\n') + '```' }
+        }
+      ]
+    });
+
+    const response = postToWebhook(webhookUrl, {
+      'Content-Type': 'application/json'
+    }, payload);
+
+    if (!response || response.code < 200 || response.code >= 300) {
+      console.log('[Notify][Slack] Failed: HTTP ' + (response ? response.code : 'no response'));
+    } else {
+      console.log('[Notify][Slack] Sent for issue: ' + issueId);
+    }
+  } catch (e) {
+    console.log('[Notify][Slack] Error: ' + e.message);
+  }
+};
+
+/**
+ * Dispatches a sync log notification to the configured external channel.
+ * Reads `notificationChannel` from settings and routes to the matching notifier.
+ * No-ops when channel is 'Disabled' or collector is empty.
+ *
+ * @param {Object} settings  - ctx.settings from the workflow context.
+ * @param {string} issueId   - YouTrack issue ID.
+ * @param {Array}  collector - Log lines accumulated during the sync run.
+ */
+const notifyChannel = (settings, issueId, collector) => {
+  const channel = settings.notificationChannel || 'Disabled';
+  if (channel === 'Disabled' || !collector || collector.length === 0) return;
+
+  if (channel === 'ntfy') {
+    if (!settings.ntfyTopicUrl) {
+      console.log('[Notify] ntfy selected but ntfyTopicUrl is not configured.');
+      return;
+    }
+    notifyNtfy(settings.ntfyTopicUrl, issueId, collector);
+  } else if (channel === 'Teams') {
+    if (!settings.teamsWebhookUrl) {
+      console.log('[Notify] Teams selected but teamsWebhookUrl is not configured.');
+      return;
+    }
+    notifyTeams(settings.teamsWebhookUrl, issueId, collector);
+  } else if (channel === 'Slack') {
+    if (!settings.slackWebhookUrl) {
+      console.log('[Notify] Slack selected but slackWebhookUrl is not configured.');
+      return;
+    }
+    notifySlack(settings.slackWebhookUrl, issueId, collector);
+  } else {
+    console.log('[Notify] Unknown notification channel: ' + channel);
+  }
+};
+
+module.exports = { performSync, notifyChannel };

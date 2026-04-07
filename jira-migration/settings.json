@@ -18,10 +18,39 @@
     },
     "verboseNotify": {
       "title": "Verbose Notifications",
-      "description": "When enabled, manual syncs (via the 'Sync to Jira' action button) display detailed sync results as YouTrack notifications. Useful in YouTrack Cloud where server logs are not directly accessible.",
+      "description": "When enabled, manual syncs display detailed sync results as a YouTrack notification popup. Useful in YouTrack Cloud where server logs are not directly accessible.",
       "type": "boolean",
       "x-scope": "GLOBAL",
       "default": false
+    },
+    "notificationChannel": {
+      "title": "Notification Channel",
+      "description": "Select which channel receives sync log notifications on manual syncs. Configure the corresponding URL field below. 'Disabled' sends no external notification.",
+      "type": "string",
+      "x-scope": "GLOBAL",
+      "enum": ["Disabled", "ntfy", "Teams", "Slack"],
+      "default": "Disabled"
+    },
+    "ntfyTopicUrl": {
+      "title": "ntfy.sh — Topic URL",
+      "description": "Full ntfy.sh topic URL, including the topic name (e.g. https://ntfy.sh/your-secret-topic). Used when Notification Channel is set to 'ntfy'. Compatible with self-hosted ntfy instances.",
+      "type": "string",
+      "format": "secret",
+      "x-scope": "GLOBAL"
+    },
+    "teamsWebhookUrl": {
+      "title": "Microsoft Teams — Incoming Webhook URL",
+      "description": "Incoming Webhook URL generated from a Teams channel connector. Used when Notification Channel is set to 'Teams'.",
+      "type": "string",
+      "format": "secret",
+      "x-scope": "GLOBAL"
+    },
+    "slackWebhookUrl": {
+      "title": "Slack — Incoming Webhook URL",
+      "description": "Incoming Webhook URL from a Slack app configuration. Used when Notification Channel is set to 'Slack'.",
+      "type": "string",
+      "format": "secret",
+      "x-scope": "GLOBAL"
     },
     "jiraProjectSlug": {
       "title": "Jira Target Project Key",
