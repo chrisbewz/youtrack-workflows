@@ -1,21 +1,20 @@
 {
-  "name": "youtrackworkflows",
+  "name": "youtrack-workflows",
   "version": "1.0.0",
   "description": "Custom workflows for my YouTrack installation",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "list-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow list --host=$npm_config_host_prod --token=$npm_config_token_prod",
-    "download-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow download --host=$npm_config_host_prod --token=$npm_config_token_prod",
-    "upload-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow upload --host=$npm_config_host_prod --token=$npm_config_token_prod",
-    "list-test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow list --host=$npm_config_host_test --token=$npm_config_token_test",
-    "download-test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow download --host=$npm_config_host_test --token=$npm_config_token_test",
-    "upload-test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 youtrack-workflow upload --host=$npm_config_host_test --token=$npm_config_token_test"
+    "list-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow list --host=$npm_config_host_prod --token=$npm_config_token_prod",
+    "download-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow download --host=$npm_config_host_prod --token=$npm_config_token_prod",
+    "upload-jira-migration:prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload  ./jira-migration --host=$npm_config_host_prod --token=$npm_config_token_prod",
+    "upload-jira-migration:test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload ./jira-migration --host=$npm_config_host_test --token=$npm_config_token_test",
+    "echo": "cross-var echo $npm_config_port"
   },
   "author": "Me",
   "private": true,
   "devDependencies": {
     "@jetbrains/youtrack-scripting": "^0.2.1",
     "@jetbrains/youtrack-scripting-api": "^2022.1.46592",
-    "cross-env": "^10.1.0"
+    "cross-env": "^10.1.0",
+    "cross-var": "^1.1.0"
   }
 }

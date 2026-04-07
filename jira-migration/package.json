@@ -1,0 +1,14 @@
+﻿{
+  "name": "jira-migration",
+  "version": "1.0.0",
+  "description": "Custom workflows workflow to migrate issues from YouTrack to Jira",
+  "author": "Christian Celso Bewzenko",
+  "dependencies": {
+    "@jetbrains/youtrack-scripting": "^0.2.1",
+    "@jetbrains/youtrack-scripting-api": "^2022.1.46592"
+  },
+  "devDependencies": {
+    "@jetbrains/youtrack-scripting": "^0.2.1",
+    "@jetbrains/youtrack-scripting-api": "^2022.1.46592"
+  }
+}
