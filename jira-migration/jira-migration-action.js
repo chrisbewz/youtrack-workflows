@@ -32,14 +32,6 @@ exports.rule = entities.Issue.action({
     const channelRaw = ctx.settings.notificationChannel;
     const hasExternalChannel = !!channelRaw && channelRaw !== 'Disabled';
 
-    // Diagnostic: always surface the raw settings values so misconfiguration is visible.
-    // This message fires regardless of verboseNotify and before any sync logic runs.
-    workflow.message(
-      '[Jira Sync] Action triggered by: ' + user +
-      ' | verboseNotify raw: ' + JSON.stringify(ctx.settings.verboseNotify) +
-      ' | notificationChannel: ' + JSON.stringify(channelRaw)
-    );
-
     // Collector is only allocated when at least one output channel needs log lines.
     const needsCollector = verboseNotify || hasExternalChannel;
     const collector = needsCollector ? [] : null;

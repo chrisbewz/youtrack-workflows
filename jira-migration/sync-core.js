@@ -341,6 +341,9 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
  * @returns {Object|null} YouTrack HTTP response object, or null on error.
  */
 const postToWebhook = (webhookUrl, headers, body) => {
+  // Webhook URL fields use plain string settings (no format:"secret") so webhookUrl
+  // is a primitive string here. We split at the host boundary because http.Connection
+  // expects only the scheme+host as its base URL, with the full path in postSync.
   const protocolEnd = webhookUrl.indexOf('://') + 3;
   const pathStart = webhookUrl.indexOf('/', protocolEnd);
   const host = pathStart === -1 ? webhookUrl : webhookUrl.substring(0, pathStart);
@@ -366,7 +369,7 @@ const notifyNtfy = (topicUrl, issueId, collector) => {
       console.log('[Notify][ntfy] Sent for issue: ' + issueId);
     }
   } catch (e) {
-    console.log('[Notify][ntfy] Error: ' + e.message);
+    console.log('[Notify][ntfy] Error: ' + e);
   }
 };
 
@@ -397,7 +400,7 @@ const notifyTeams = (webhookUrl, issueId, collector) => {
       console.log('[Notify][Teams] Sent for issue: ' + issueId);
     }
   } catch (e) {
-    console.log('[Notify][Teams] Error: ' + e.message);
+    console.log('[Notify][Teams] Error: ' + e);
   }
 };
 
@@ -429,7 +432,7 @@ const notifySlack = (webhookUrl, issueId, collector) => {
       console.log('[Notify][Slack] Sent for issue: ' + issueId);
     }
   } catch (e) {
-    console.log('[Notify][Slack] Error: ' + e.message);
+    console.log('[Notify][Slack] Error: ' + e);
   }
 };
 

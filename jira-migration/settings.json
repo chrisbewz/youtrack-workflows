@@ -33,23 +33,20 @@
     },
     "ntfyTopicUrl": {
       "title": "ntfy.sh — Topic URL",
-      "description": "Full ntfy.sh topic URL, including the topic name (e.g. https://ntfy.sh/your-secret-topic). Used when Notification Channel is set to 'ntfy'. Compatible with self-hosted ntfy instances.",
+      "description": "Full ntfy.sh topic URL, including the topic name (e.g. https://ntfy.sh/your-secret-topic). Used when Notification Channel is set to 'ntfy'. Compatible with self-hosted ntfy instances. Treat this URL as sensitive — it acts as your access key.",
       "type": "string",
-      "format": "secret",
       "x-scope": "GLOBAL"
     },
     "teamsWebhookUrl": {
       "title": "Microsoft Teams — Incoming Webhook URL",
-      "description": "Incoming Webhook URL generated from a Teams channel connector. Used when Notification Channel is set to 'Teams'.",
+      "description": "Incoming Webhook URL generated from a Teams channel connector. Used when Notification Channel is set to 'Teams'. Treat this URL as sensitive.",
       "type": "string",
-      "format": "secret",
       "x-scope": "GLOBAL"
     },
     "slackWebhookUrl": {
       "title": "Slack — Incoming Webhook URL",
-      "description": "Incoming Webhook URL from a Slack app configuration. Used when Notification Channel is set to 'Slack'.",
+      "description": "Incoming Webhook URL from a Slack app configuration. Used when Notification Channel is set to 'Slack'. Treat this URL as sensitive.",
       "type": "string",
-      "format": "secret",
       "x-scope": "GLOBAL"
     },
     "jiraProjectSlug": {
