@@ -1,6 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name" : "jira-migration",
-  "title" : "jira-migration",
+  "icon": "icons8-jira-48.png",
+  "iconDark": "icons8-jira-48.png",
+  "url": "https://github.com/chrisbewz/youtrack-workflows",
+  "title" : "Jira Synchronization Manager",
   "version" : "0.0.1",
   "vendor" : {
     "name" : "Christian Celso Bewzenko",

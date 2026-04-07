@@ -4,14 +4,25 @@
   "properties": {
     "jiraApiToken": {
       "title": "Jira API Token (Basic Auth)",
-      "description": "Jira API token with permissions to access issues information through REST API. Generate it at https://id.atlassian.com/manage-profile/security/api-tokens.",
+      "description": "Jira API token with permissions to access issues via REST API. Generate at https://id.atlassian.com/manage-profile/security/api-tokens.",
       "type": "string",
-      "format": "secret"
+      "format": "secret",
+      "x-scope": "GLOBAL"
     },
     "jiraEndpointUrl": {
       "title": "Jira URL",
-      "description": "Jira instance URL, without the trailing slash",
-      "type": "string"
+      "description": "Jira instance base URL, without trailing slash.",
+      "type": "string",
+      "x-scope": "GLOBAL",
+      "examples": ["https://your-company.atlassian.net"]
+    },
+    "jiraProjectSlug": {
+      "title": "Jira Target Project Key",
+      "description": "Key of the target Jira project. Found in the URL: https://your-company.atlassian.net/browse/PROJECT-123.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "examples": ["WTD-E3"]
     }
-  }
+  },
+  "required": ["jiraApiToken", "jiraEndpointUrl", "jiraProjectSlug"]
 }

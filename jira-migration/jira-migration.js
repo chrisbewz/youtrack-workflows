@@ -1,5 +1,4 @@
 const entities = require('@jetbrains/youtrack-scripting-api/entities');
-const search = require('@jetbrains/youtrack-scripting-api/search');
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 
@@ -7,12 +6,6 @@ const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
  * YouTrack to Jira Migration Workflow
  * Refactored for maintainability using minor mapping functions.
  */
-
-// --- CONFIGURATION ---
-// JIRA_AUTH is intentionally absent here. The API token is stored as a secret
-// in settings.json and accessed at runtime via ctx.settings.jiraApiToken.
-// Store the pre-encoded Base64 value (btoa('email:api-token')) through the app package UI.
-const JIRA_URL = `${ctx.settings.jiraEndpointUrl}/rest/api/3`;
 
 const shouldEvalRule = (ctx) => {
   if (!ctx.issue.isReported)
@@ -39,8 +32,21 @@ exports.rule = entities.Issue.onChange({
   action: (ctx) => {
     const issue = ctx.issue;
 
+    const jiraEndpoint = ctx.settings.jiraEndpointUrl;
+    const jiraProjectSlug = ctx.settings.jiraProjectSlug;
+    const jiraApiToken = ctx.settings.jiraApiToken;
+
+    // FIX: Guard against missing settings before any logic runs.
+    // Without this, JIRA_URL would resolve to "undefined/rest/api/3" and fail with a cryptic error.
+    if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
+      console.log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping.');
+      return;
+    }
+
+    const JIRA_URL = jiraEndpoint + '/rest/api/3';
+    const JIRA_PROJECT_KEY = jiraProjectSlug;
+
     // --- MAPPING HELPERS ---
-    const JIRA_PROJECT_KEY = issue.project.fields.PID;
 
     const getJiraStatus = (issue) => {
       const statusMapping = {
@@ -169,18 +175,13 @@ exports.rule = entities.Issue.onChange({
       return changes;
     };
 
-    const buildJiraPayload = (issue, components) => {
-      const jiraPriority = getJiraPriority(issue);
-      const jiraIssueType = getJiraIssueType(issue);
-      const jiraLabels = getJiraLabels(issue);
-      const jiraEstimation = getJiraEstimation(issue);
-
+    const buildJiraPayload = (issue, components, mappings) => {
       const payload = {
         fields: {
           project: { key: JIRA_PROJECT_KEY },
           summary: issue.summary,
-          priority: { name: jiraPriority },
-          labels: jiraLabels,
+          priority: { name: mappings.priority },
+          labels: mappings.labels,
           description: {
             type: 'doc',
             version: 1,
@@ -196,7 +197,7 @@ exports.rule = entities.Issue.onChange({
               }
             ]
           },
-          issuetype: { name: jiraIssueType }
+          issuetype: { name: mappings.issueType }
         }
       };
 
@@ -204,10 +205,10 @@ exports.rule = entities.Issue.onChange({
         payload.fields.components = components;
       }
 
-      if (jiraEstimation) {
+      if (mappings.estimation) {
         payload.fields.timetracking = {
-          originalEstimate: jiraEstimation,
-          remainingEstimate: jiraEstimation
+          originalEstimate: mappings.estimation,
+          remainingEstimate: mappings.estimation
         };
       }
 
@@ -216,7 +217,7 @@ exports.rule = entities.Issue.onChange({
 
     // --- CONNECTION SETUP ---
     const connection = new http.Connection(JIRA_URL, null, 2000);
-    connection.addHeader('Authorization', 'Basic ' + ctx.settings.jiraApiToken);
+    connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
     connection.addHeader('Content-Type', 'application/json');
 
     // --- EXECUTION LOGIC ---
@@ -236,6 +237,17 @@ exports.rule = entities.Issue.onChange({
     console.log('[Jira Sync] Triggered for issue: ' + issue.id + ' | Mode: ' + syncMode);
     console.log('[Jira Sync] Changes detected: ' + (changes.length > 0 ? changes.join(' | ') : 'none'));
 
+    // --- EVALUATED MAPPINGS ---
+    // Computed once here and reused in both logging and buildJiraPayload,
+    // avoiding redundant calls to the mapping helper functions.
+    const mappings = {
+      status:    getJiraStatus(issue),
+      issueType: getJiraIssueType(issue),
+      priority:  getJiraPriority(issue),
+      labels:    getJiraLabels(issue),
+      estimation: getJiraEstimation(issue)
+    };
+
     // --- JIRA CONTEXT ---
     // Logged in both modes to confirm which Jira project and issue are being targeted,
     // making it easy to cross-reference logs with the Jira side.
@@ -244,23 +256,15 @@ exports.rule = entities.Issue.onChange({
     console.log('[Jira Sync] Jira Project Key: ' + JIRA_PROJECT_KEY);
     console.log('[Jira Sync] Jira Issue ID: ' + (jiraDataKey || 'not yet assigned') + ' | Operation: ' + (isUpdate ? 'UPDATE' : 'CREATE'));
 
-    // --- EVALUATED MAPPINGS ---
-    // Logged in both modes so you can always trace how YouTrack values were translated
-    // to Jira equivalents, regardless of whether the run is a simulation or not.
-    const jiraStatus = getJiraStatus(issue);
-    const jiraIssueType = getJiraIssueType(issue);
-    const jiraLabels = getJiraLabels(issue);
-    const jiraEstimation = getJiraEstimation(issue);
-    console.log('[Jira Sync] Mappings → IssueType: ' + jiraIssueType + ' | Priority: ' + getJiraPriority(issue) + ' | Status: ' + jiraStatus);
-    console.log('[Jira Sync] Mappings → Labels: [' + (jiraLabels.length > 0 ? jiraLabels.join(', ') : 'none') + '] | Estimation: ' + (jiraEstimation || 'none'));
+    // Logged in both modes so you can always trace how YouTrack values were translated to Jira equivalents.
+    console.log('[Jira Sync] Mappings → IssueType: ' + mappings.issueType + ' | Priority: ' + mappings.priority + ' | Status: ' + mappings.status);
+    console.log('[Jira Sync] Mappings → Labels: [' + (mappings.labels.length > 0 ? mappings.labels.join(', ') : 'none') + '] | Estimation: ' + (mappings.estimation || 'none'));
     if (issue.fields.Subsystem) {
       console.log('[Jira Sync] Mappings → Subsystem: "' + issue.fields.Subsystem.name + '" (component lookup ' + (isDryRun ? 'skipped in dry-run' : 'will be resolved') + ')');
     }
 
-    // FIX: Dry-Run previously triggered a real HTTP call to fetch Jira components,
-    // making the simulation not fully offline. Component lookup is now skipped in dry-run.
     const jiraComponents = isDryRun ? [] : getJiraComponents(issue, connection, JIRA_PROJECT_KEY);
-    const jiraPayload = buildJiraPayload(issue, jiraComponents);
+    const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings);
 
     if (isDryRun) {
       console.log('[Jira Sync][DRY-RUN] Full Jira payload: ' + JSON.stringify(jiraPayload, null, 2));
@@ -301,7 +305,8 @@ exports.rule = entities.Issue.onChange({
 
     // --- MIGRATE COMMENTS (only on CREATE to avoid duplicates) ---
     if (!isUpdate) {
-      const commentCount = issue.comments.size || 0;
+      // FIX: .length is the correct property for YouTrack collections; .size was always returning 0.
+      const commentCount = issue.comments.length || 0;
       // Logged in both modes: useful to know upfront how many comments will be sent.
       console.log('[Jira Sync] Comments to migrate: ' + commentCount);
 
@@ -332,26 +337,30 @@ exports.rule = entities.Issue.onChange({
     }
 
     // --- TRANSITION STATUS IF NEEDED ---
-    if (jiraStatus && jiraStatus !== 'To Do') {
+    // FIX: Transition is now only attempted when the issue was newly reported or when State
+    // explicitly changed. Previously it ran on every workflow execution (e.g. summary edits),
+    // causing unnecessary API calls and potential errors when the issue was already in the target state.
+    const stateChanged = issue.becomesReported || issue.fields.State.isChanged;
+    if (stateChanged && mappings.status !== 'To Do') {
       if (!isDryRun) {
         const transitionsResponse = connection.getSync('/issue/' + resolvedJiraKey + '/transitions');
         if (transitionsResponse && transitionsResponse.code === 200) {
           const transitions = JSON.parse(transitionsResponse.response).transitions;
-          const transition = transitions.find(t => t.to.name === jiraStatus);
+          const transition = transitions.find(t => t.to.name === mappings.status);
           if (transition) {
             const transitionPayload = { transition: { id: transition.id } };
             const transitionResponse = connection.postSync('/issue/' + resolvedJiraKey + '/transitions', {}, JSON.stringify(transitionPayload));
             if (!transitionResponse || transitionResponse.code !== 204) {
-              console.log('[Jira Sync] Failed to transition ' + resolvedJiraKey + ' to "' + jiraStatus + '". Error: ' + (transitionResponse ? transitionResponse.response : 'No response'));
+              console.log('[Jira Sync] Failed to transition ' + resolvedJiraKey + ' to "' + mappings.status + '". Error: ' + (transitionResponse ? transitionResponse.response : 'No response'));
             }
           } else {
-            console.log('[Jira Sync] No matching transition found in Jira for status: "' + jiraStatus + '". Skipping transition.');
+            console.log('[Jira Sync] No matching transition found in Jira for status: "' + mappings.status + '". Skipping transition.');
           }
         } else {
           console.log('[Jira Sync] Failed to fetch transitions for ' + resolvedJiraKey + '. Error: ' + (transitionsResponse ? transitionsResponse.response : 'No response'));
         }
       } else {
-        console.log('[Jira Sync][DRY-RUN] Would transition issue to status: "' + jiraStatus + '"');
+        console.log('[Jira Sync][DRY-RUN] Would transition issue to status: "' + mappings.status + '"');
       }
     }
   },
