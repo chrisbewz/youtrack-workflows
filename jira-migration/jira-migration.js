@@ -12,7 +12,7 @@ const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 // JIRA_AUTH is intentionally absent here. The API token is stored as a secret
 // in settings.json and accessed at runtime via ctx.settings.jiraApiToken.
 // Store the pre-encoded Base64 value (btoa('email:api-token')) through the app package UI.
-const JIRA_URL = 'https://jiracloudweg.atlassian.net/rest/api/3';
+const JIRA_URL = `${ctx.settings.jiraEndpointUrl}/rest/api/3`;
 
 const shouldEvalRule = (ctx) => {
   if (!ctx.issue.isReported)
@@ -360,16 +360,16 @@ exports.rule = entities.Issue.onChange({
       type: entities.Field.stringType,
       name: 'Jira ID'
     },
-    'State': {
+    State: {
       type: entities.State.fieldType
     },
-    'Type': {
+    Type: {
       type: entities.EnumField.fieldType
     },
-    'Priority': {
+    Priority: {
       type: entities.EnumField.fieldType
     },
-    'Estimation': {
+    Estimation: {
       type: entities.Field.periodType,
       name: 'Estimation'
     },
@@ -377,7 +377,7 @@ exports.rule = entities.Issue.onChange({
       type: entities.EnumField.fieldType,
       name: 'Jira Sync'
     },
-    'Subsystem': {
+    Subsystem: {
       type: entities.EnumField.fieldType
     }
   }
