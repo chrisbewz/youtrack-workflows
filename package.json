@@ -5,8 +5,10 @@
   "scripts": {
     "list-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow list --host=$npm_config_host_prod --token=$npm_config_token_prod",
     "download-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow download --host=$npm_config_host_prod --token=$npm_config_token_prod",
+
     "upload-jira-migration:prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload  ./jira-migration --host=$npm_config_host_prod --token=$npm_config_token_prod",
     "upload-jira-migration:test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload ./jira-migration --host=$npm_config_host_test --token=$npm_config_token_test",
+
     "echo": "cross-var echo $npm_config_port"
   },
   "author": "Me",
