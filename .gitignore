@@ -1,0 +1,13 @@
+﻿# Node.js dependencies
+node_modules/
+npm-debug.log*
+
+# Environment and configuration files
+.npmrc
+
+# IDE-specific files
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
