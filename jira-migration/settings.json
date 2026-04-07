@@ -16,6 +16,13 @@
       "x-scope": "GLOBAL",
       "examples": ["https://your-company.atlassian.net"]
     },
+    "verboseNotify": {
+      "title": "Verbose Notifications",
+      "description": "When enabled, manual syncs (via the 'Sync to Jira' action button) display detailed sync results as YouTrack notifications. Useful in YouTrack Cloud where server logs are not directly accessible.",
+      "type": "boolean",
+      "x-scope": "GLOBAL",
+      "default": false
+    },
     "jiraProjectSlug": {
       "title": "Jira Target Project Key",
       "description": "Key of the target Jira project. Found in the URL: https://your-company.atlassian.net/browse/PROJECT-123.",
