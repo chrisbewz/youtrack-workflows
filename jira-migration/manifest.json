@@ -1,0 +1,9 @@
+﻿{
+  "name" : "jira-sync",
+  "title" : "jira-sync",
+  "version" : "0.0.1",
+  "vendor" : {
+    "name" : "Christian Celso Bewzenko",
+    "email" : "crisbewz02@gmail.com"
+  }
+}
