@@ -35,11 +35,17 @@ exports.rule = entities.Issue.onChange({
     const jiraEndpoint = ctx.settings.jiraEndpointUrl;
     const jiraProjectSlug = ctx.settings.jiraProjectSlug;
     const jiraApiToken = ctx.settings.jiraApiToken;
+    const syncMode = ctx.settings.syncMode || 'Disabled';
 
-    // FIX: Guard against missing settings before any logic runs.
+    // Guard against missing settings before any logic runs.
     // Without this, JIRA_URL would resolve to "undefined/rest/api/3" and fail with a cryptic error.
     if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
       console.log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping.');
+      return;
+    }
+
+    if (syncMode === 'Disabled') {
+      console.log('[Jira Sync] Sync disabled for project. Skipping issue: ' + issue.id);
       return;
     }
 
@@ -221,13 +227,6 @@ exports.rule = entities.Issue.onChange({
     connection.addHeader('Content-Type', 'application/json');
 
     // --- EXECUTION LOGIC ---
-    const syncMode = issue.fields['Jira Sync'] ? issue.fields['Jira Sync'].name : 'Disabled';
-
-    if (syncMode === 'Disabled') {
-      console.log('[Jira Sync] Sync disabled for issue: ' + issue.id + '. Skipping.');
-      return;
-    }
-
     const isDryRun = syncMode === 'Dry-Run';
 
     // --- TRIGGER SUMMARY ---
@@ -381,10 +380,6 @@ exports.rule = entities.Issue.onChange({
     Estimation: {
       type: entities.Field.periodType,
       name: 'Estimation'
-    },
-    'Jira Sync': {
-      type: entities.EnumField.fieldType,
-      name: 'Jira Sync'
     },
     Subsystem: {
       type: entities.EnumField.fieldType

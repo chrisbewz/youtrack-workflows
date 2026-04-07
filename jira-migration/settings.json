@@ -22,7 +22,15 @@
       "type": "string",
       "x-scope": "PROJECT",
       "examples": ["WTD-E3"]
+    },
+    "syncMode": {
+      "title": "Sync Mode",
+      "description": "Controls how issues in this project are synchronized with Jira. 'Enabled' syncs issues normally, 'Dry-Run' logs all actions without making real changes, 'Disabled' skips sync entirely.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "enum": ["Enabled", "Dry-Run", "Disabled"],
+      "default": "Disabled"
     }
   },
-  "required": ["jiraApiToken", "jiraEndpointUrl", "jiraProjectSlug"]
+  "required": ["jiraApiToken", "jiraEndpointUrl", "jiraProjectSlug", "syncMode"]
 }
