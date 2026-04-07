@@ -315,10 +315,25 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
 // --- NOTIFICATION HELPERS ---
 
 /**
- * Splits a full webhook URL into base + path and POSTs to it.
- * All webhook URLs (ntfy, Teams, Slack) follow the same pattern:
- *   https://host/...long-path.../last-segment
- * http.Connection requires base URL + relative path as separate arguments.
+ * Splits a full webhook URL into host + full path and POSTs to it.
+ *
+ * http.Connection expects only the host (scheme + authority) as its base URL.
+ * Passing a base URL that already contains a path causes the connection to
+ * normalize to just the host, which corrupts the request path for multi-segment
+ * webhook URLs like Slack (/services/T.../B.../token) and Teams (/webhookb2/...).
+ *
+ * Correct split strategy: find the first '/' after '://' to isolate the host,
+ * then pass the remainder as the full path to postSync.
+ *
+ * Example — Slack:
+ *   https://hooks.slack.com/services/T123/B456/token
+ *   → host: https://hooks.slack.com
+ *   → path: /services/T123/B456/token
+ *
+ * Example — ntfy:
+ *   https://ntfy.sh/my-topic
+ *   → host: https://ntfy.sh
+ *   → path: /my-topic
  *
  * @param {string} webhookUrl - Full URL including path.
  * @param {Object} headers    - Request headers object.
@@ -326,10 +341,11 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
  * @returns {Object|null} YouTrack HTTP response object, or null on error.
  */
 const postToWebhook = (webhookUrl, headers, body) => {
-  const lastSlash = webhookUrl.lastIndexOf('/');
-  const baseUrl = webhookUrl.substring(0, lastSlash);
-  const path = webhookUrl.substring(lastSlash);
-  const connection = new http.Connection(baseUrl, null, 5000);
+  const protocolEnd = webhookUrl.indexOf('://') + 3;
+  const pathStart = webhookUrl.indexOf('/', protocolEnd);
+  const host = pathStart === -1 ? webhookUrl : webhookUrl.substring(0, pathStart);
+  const path = pathStart === -1 ? '/' : webhookUrl.substring(pathStart);
+  const connection = new http.Connection(host, null, 5000);
   return connection.postSync(path, headers, body);
 };
 

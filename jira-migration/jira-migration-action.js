@@ -24,8 +24,21 @@ exports.rule = entities.Issue.action({
   },
   action: (ctx) => {
     const user = ctx.currentUser ? ctx.currentUser.login : 'unknown';
-    const verboseNotify = ctx.settings.verboseNotify === true;
-    const hasExternalChannel = (ctx.settings.notificationChannel || 'Disabled') !== 'Disabled';
+
+    // YouTrack may return boolean settings as the string "true" instead of the
+    // boolean true — using strict equality (=== true) silently evaluates to false.
+    // Normalizing with a loose truthy check covers both cases.
+    const verboseNotify = ctx.settings.verboseNotify === true || ctx.settings.verboseNotify === 'true';
+    const channelRaw = ctx.settings.notificationChannel;
+    const hasExternalChannel = !!channelRaw && channelRaw !== 'Disabled';
+
+    // Diagnostic: always surface the raw settings values so misconfiguration is visible.
+    // This message fires regardless of verboseNotify and before any sync logic runs.
+    workflow.message(
+      '[Jira Sync] Action triggered by: ' + user +
+      ' | verboseNotify raw: ' + JSON.stringify(ctx.settings.verboseNotify) +
+      ' | notificationChannel: ' + JSON.stringify(channelRaw)
+    );
 
     // Collector is only allocated when at least one output channel needs log lines.
     const needsCollector = verboseNotify || hasExternalChannel;
