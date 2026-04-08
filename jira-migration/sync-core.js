@@ -104,16 +104,24 @@ const getJiraStatus = (issue) => {
   return statusMapping[issue.fields.State.name] || 'To Do';
 };
 
-const getJiraIssueType = (issue) => {
-  const typeMapping = {
-    'Bug': 'Bug',
-    'Feature': 'Story',
-    'Task': 'Task',
-    'Epic': 'Epic',
-    'Subtask': 'Sub-task',
+const getJiraIssueType = (issue, settings) => {
+  const typeName = issue.fields.Type ? issue.fields.Type.name : '';
+
+  // Project-level type configuration takes priority.
+  // Each setting maps a YouTrack type name to one of the four standard Jira issue types.
+  // Empty/missing settings fall back to the hardcoded default names below.
+  if (typeName === (settings.epicItemType    || 'Epic'))    return 'Epic';
+  if (typeName === (settings.storyItemType   || 'Feature')) return 'Story';
+  if (typeName === (settings.taskItemType    || 'Task'))    return 'Task';
+  if (typeName === (settings.subTaskItemType || 'Subtask')) return 'Sub-task';
+
+  // Legacy mappings for types not covered by the four configurable slots above.
+  // These remain hardcoded for backward compatibility.
+  const legacyMapping = {
+    'Bug':         'Bug',
     'Improvement': 'Story'
   };
-  return typeMapping[issue.fields.Type.name] || 'Task';
+  return legacyMapping[typeName] || 'Task';
 };
 
 const getJiraPriority = (issue) => {
@@ -275,7 +283,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   // Computed once and reused in both logging and payload building.
   const mappings = {
     status:     getJiraStatus(issue),
-    issueType:  getJiraIssueType(issue),
+    issueType:  getJiraIssueType(issue, ctx.settings),
     priority:   getJiraPriority(issue),
     labels:     getJiraLabels(issue),
     estimation: getJiraEstimation(issue)

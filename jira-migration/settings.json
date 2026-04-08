@@ -70,6 +70,34 @@
       "x-scope": "PROJECT",
       "enum": ["Enabled", "Dry-Run", "Disabled"],
       "default": "Disabled"
+    },
+    "epicItemType": {
+      "title": "Tipo 'Épico' no YouTrack",
+      "description": "Nome do valor do campo 'Tipo' no YouTrack que deve ser mapeado para Epic no Jira. Deixe em branco para usar o padrão ('Epic').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Epic"
+    },
+    "storyItemType": {
+      "title": "Tipo 'História' no YouTrack",
+      "description": "Nome do valor do campo 'Tipo' no YouTrack que deve ser mapeado para Story no Jira. Deixe em branco para usar o padrão ('Feature').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Feature"
+    },
+    "taskItemType": {
+      "title": "Tipo 'Tarefa' no YouTrack",
+      "description": "Nome do valor do campo 'Tipo' no YouTrack que deve ser mapeado para Task no Jira. Deixe em branco para usar o padrão ('Task').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Task"
+    },
+    "subTaskItemType": {
+      "title": "Tipo 'Subtarefa' no YouTrack",
+      "description": "Nome do valor do campo 'Tipo' no YouTrack que deve ser mapeado para Sub-task no Jira. Deixe em branco para usar o padrão ('Subtask').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Subtask"
     }
   },
   "required": ["jiraApiToken", "jiraEndpointUrl", "jiraProjectSlug", "syncMode"]
