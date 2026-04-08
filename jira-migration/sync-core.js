@@ -326,6 +326,22 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     return syncResult;
   }
 
+  // Suppression guard: if Jira Closed is set and overrideCompleted is not explicitly enabled,
+  // skip this issue to avoid overwriting a status change made directly in Jira.
+  // This does not apply to Sub-tasks, which are evaluated independently per issue.
+  const jiraStateField    = issue.fields['Jira State'];
+  const jiraStateName     = jiraStateField && jiraStateField.name ? jiraStateField.name : jiraStateField;
+  const isJiraClosed      = jiraStateName === 'Closed';
+  const overrideCompleted = ctx.settings.overrideCompleted === true || ctx.settings.overrideCompleted === 'true';
+  const isSubTask         = issue.fields.Type && issue.fields.Type.name === (ctx.settings.subTaskItemType || 'Subtask');
+
+  if (isJiraClosed && !overrideCompleted && !isSubTask) {
+    log('[Jira Sync] Issue ' + issue.id + ' is marked as Jira Closed and overrideCompleted is disabled. Skipping sync.');
+    syncResult.operation = 'skipped';
+    syncResult.errorMsg  = 'issue encerrada no Jira (overrideCompleted desabilitado)';
+    return syncResult;
+  }
+
   const JIRA_URL = jiraEndpoint + '/rest/api/3';
   const JIRA_PROJECT_KEY = jiraProjectSlug;
   const isDryRun = syncMode === 'Dry-Run';
@@ -476,6 +492,89 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   }
 
   return syncResult;
+};
+
+// --- JIRA STATUS CHECK ---
+
+/**
+ * Checks the current status of a Jira issue and updates the YouTrack `Jira Closed`
+ * boolean field accordingly.
+ *
+ * Uses Jira's status category (To Do / In Progress / Done) rather than comparing
+ * status names directly, so it works regardless of how the Jira project names its statuses.
+ *
+ * Behaviour:
+ *  - If the issue has no `Jira ID`, it is skipped.
+ *  - If the Jira status category is "done", `Jira Closed` is set to true.
+ *  - If the Jira status is not "done" (e.g. re-opened), `Jira Closed` is reset to false.
+ *
+ * @param {Object}  issue     - The YouTrack issue.
+ * @param {Object}  ctx       - Workflow context (provides ctx.settings).
+ * @param {Array}   [collector] - Optional log collector (same pattern as performSync).
+ * @returns {{ issueId: string, jiraKey: string|null, jiraClosed: boolean|null, skipped: boolean, errorMsg: string|null }}
+ */
+const checkJiraStatus = (issue, ctx, collector) => {
+  const log = (msg) => {
+    console.log(msg);
+    if (collector) collector.push(msg);
+  };
+
+  const result = {
+    issueId:   issue.id,
+    jiraKey:   null,
+    jiraClosed: null,
+    skipped:   false,
+    errorMsg:  null
+  };
+
+  const jiraKey       = issue.fields['Jira ID'] || null;
+  const jiraEndpoint  = ctx.settings.jiraEndpointUrl;
+  const jiraApiToken  = ctx.settings.jiraApiToken;
+
+  if (!jiraKey) {
+    log('[Jira Check] No Jira ID on issue ' + issue.id + '. Skipping.');
+    result.skipped  = true;
+    result.errorMsg = 'Jira ID nao preenchido';
+    return result;
+  }
+
+  if (!jiraEndpoint || !jiraApiToken) {
+    log('[Jira Check] Missing required settings. Skipping issue: ' + issue.id);
+    result.skipped  = true;
+    result.errorMsg = 'configuracoes obrigatorias ausentes';
+    return result;
+  }
+
+  result.jiraKey = jiraKey;
+
+  const JIRA_URL = jiraEndpoint + '/rest/api/3';
+  const connection = new http.Connection(JIRA_URL, null, 2000);
+  connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
+  connection.addHeader('Content-Type', 'application/json');
+
+  // Request only the status field to keep the response lightweight.
+  const response = connection.getSync('/issue/' + jiraKey, { fields: 'status' });
+
+  if (!response || response.code !== 200) {
+    const errMsg = 'Failed to fetch Jira issue ' + jiraKey + '. HTTP ' + (response ? response.code : 'no response');
+    log('[Jira Check] ' + errMsg);
+    result.skipped  = true;
+    result.errorMsg = errMsg;
+    return result;
+  }
+
+  const jiraIssue       = JSON.parse(response.response);
+  const statusCategory  = jiraIssue.fields.status.statusCategory.key; // 'new' | 'indeterminate' | 'done'
+  const statusName      = jiraIssue.fields.status.name;
+  const isClosed        = statusCategory === 'done';
+
+  log('[Jira Check] ' + issue.id + ' → Jira ' + jiraKey + ' status: "' + statusName + '" (category: ' + statusCategory + ') → Jira Closed: ' + isClosed);
+
+  // Jira State is a YouTrack enum field with values 'Open' and 'Closed'.
+  issue.fields['Jira State'] = isClosed ? 'Closed' : 'Open';
+  result.jiraClosed = isClosed;
+
+  return result;
 };
 
 // --- NOTIFICATION HELPERS ---
@@ -649,4 +748,4 @@ const notifyChannel = (settings, syncResult) => {
   }
 };
 
-module.exports = { performSync, notifyChannel, buildSlackMessage, buildTeamsMessage };
+module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage };

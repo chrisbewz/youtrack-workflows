@@ -55,6 +55,10 @@ exports.rule = entities.Issue.action({
       type: entities.Field.stringType,
       name: 'Jira ID'
     },
+    'Jira State': {
+      type: entities.EnumField.fieldType,
+      name: 'Jira State'
+    },
     State: {
       type: entities.State.fieldType
     },

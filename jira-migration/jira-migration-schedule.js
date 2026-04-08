@@ -39,6 +39,10 @@ exports.rule = entities.Issue.onSchedule({
       type: entities.Field.stringType,
       name: 'Jira ID'
     },
+    'Jira State': {
+      type: entities.EnumField.fieldType,
+      name: 'Jira State'
+    },
     State: {
       type: entities.State.fieldType
     },
@@ -53,6 +57,45 @@ exports.rule = entities.Issue.onSchedule({
       name: 'Estimation'
     },
     Subsystem: {
+      type: entities.EnumField.fieldType
+    }
+  }
+});
+
+/**
+ * onSchedule rule — Periodically checks the Jira status of already-synced issues
+ * and updates the `Jira Closed` field on the YouTrack side.
+ *
+ * Runs daily at 03:30, half an hour after the bulk sync, so the status check
+ * cycle does not interfere with the sync cycle.
+ *
+ * Only processes issues that already have a Jira ID (i.e. previously synced).
+ * Operates in both Enabled and Dry-Run modes — reading from Jira is always safe.
+ */
+exports.rule = entities.Issue.onSchedule({
+  title: 'Jira Bulk Status Check (Synced Issues)',
+  // Selects reported issues that already have a Jira ID — i.e. previously synced.
+  search: 'has: {Jira ID} #Reported',
+  cron: '0 30 3 * * ?',
+  guard: (ctx) => {
+    const syncMode = ctx.settings.syncMode || 'Disabled';
+    return syncMode !== 'Disabled' &&
+      !!ctx.settings.jiraApiToken &&
+      !!ctx.settings.jiraEndpointUrl;
+  },
+  action: (ctx) => {
+    syncCore.checkJiraStatus(ctx.issue, ctx);
+  },
+  requirements: {
+    'Jira ID': {
+      type: entities.Field.stringType,
+      name: 'Jira ID'
+    },
+    'Jira State': {
+      type: entities.EnumField.fieldType,
+      name: 'Jira State'
+    },
+    Type: {
       type: entities.EnumField.fieldType
     }
   }

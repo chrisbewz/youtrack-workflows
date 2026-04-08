@@ -71,6 +71,13 @@
       "enum": ["Enabled", "Dry-Run", "Disabled"],
       "default": "Disabled"
     },
+    "overrideCompleted": {
+      "title": "Override Completed Jira Issues",
+      "description": "When enabled, YouTrack will sync issues even if they are marked as closed in Jira (Jira Closed = true). By default, closed Jira issues are skipped to prevent overwriting changes made directly in Jira. Does not apply to Sub-tasks, which are always evaluated independently.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
     "epicItemType": {
       "title": "Tipo 'Épico' no YouTrack",
       "description": "Nome do valor do campo 'Tipo' no YouTrack que deve ser mapeado para Epic no Jira. Deixe em branco para usar o padrão ('Epic').",
