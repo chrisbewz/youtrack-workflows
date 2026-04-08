@@ -16,6 +16,13 @@
       "x-scope": "GLOBAL",
       "examples": ["https://your-company.atlassian.net"]
     },
+    "youtrackBaseUrl": {
+      "title": "YouTrack URL",
+      "description": "YouTrack instance base URL, without trailing slash. Used to build project links in sync notifications.",
+      "type": "string",
+      "x-scope": "GLOBAL",
+      "examples": ["https://your-company.youtrack.cloud"]
+    },
     "verboseNotify": {
       "title": "Verbose Notifications",
       "description": "When enabled, manual syncs display detailed sync results as a YouTrack notification popup. Useful in YouTrack Cloud where server logs are not directly accessible.",

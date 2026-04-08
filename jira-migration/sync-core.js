@@ -26,26 +26,42 @@ const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
  * The dry-run indicator is intentionally excluded from the output.
  *
  * @param {Object}   syncResult
- * @param {string}   syncResult.issueId      - YouTrack issue ID (e.g. YOU-45)
- * @param {string}   syncResult.issueSummary - Issue summary text
- * @param {string}   syncResult.jiraKey      - Jira issue key, or null if unavailable
- * @param {string}   syncResult.jiraBaseUrl  - Jira instance base URL (no trailing slash)
- * @param {string}   syncResult.projectKey   - Jira project key (e.g. BACK)
- * @param {string}   syncResult.operation    - 'created' | 'updated' | 'skipped' | 'error'
- * @param {string[]} syncResult.changes      - Human-readable change descriptions (for updates)
- * @param {string}   syncResult.errorMsg     - Error description (for errors and skips)
- * @param {Date}     syncResult.timestamp    - Sync timestamp
+ * @param {string}   syncResult.issueId                  - YouTrack issue ID (e.g. YOU-45)
+ * @param {string}   syncResult.issueSummary             - Issue summary text
+ * @param {string}   syncResult.jiraKey                  - Jira issue key, or null if unavailable
+ * @param {string}   syncResult.jiraBaseUrl              - Jira instance base URL (no trailing slash)
+ * @param {string}   syncResult.projectKey               - Jira project key (e.g. BACK)
+ * @param {string}   syncResult.youtrackProjectName      - YouTrack project display name (e.g. WTD-E3)
+ * @param {string}   syncResult.youtrackProjectShortName - YouTrack project short name (e.g. E3)
+ * @param {string}   syncResult.youtrackBaseUrl          - YouTrack instance base URL (no trailing slash)
+ * @param {boolean}  syncResult.isDryRun                 - Whether this was a dry-run execution
+ * @param {string}   syncResult.operation                - 'created' | 'updated' | 'skipped' | 'error'
+ * @param {string[]} syncResult.changes                  - Human-readable change descriptions (for updates)
+ * @param {string}   syncResult.errorMsg                 - Error description (for errors and skips)
+ * @param {Date}     syncResult.timestamp                - Sync timestamp
  * @returns {string} Formatted notification message string
  */
 const buildSyncMessage = (syncResult) => {
-  const { projectKey, jiraBaseUrl, issueId, issueSummary, jiraKey, operation, changes, errorMsg, timestamp } = syncResult;
+  const {
+    projectKey, jiraBaseUrl, issueId, issueSummary, jiraKey, operation, changes, errorMsg, timestamp,
+    youtrackProjectName, youtrackProjectShortName, youtrackBaseUrl, isDryRun
+  } = syncResult;
 
   const pad = n => String(n).padStart(2, '0');
   const d = timestamp instanceof Date ? timestamp : new Date();
   const dateStr = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
     '  ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 
-  const lines = ['🔄 *Sync Jira* — ' + (projectKey || issueId) + '  |  ' + dateStr, ''];
+  // Build the project reference: a clickable link when youtrackBaseUrl is configured,
+  // or plain text fallback otherwise.
+  const projectLabel = youtrackProjectName || youtrackProjectShortName || projectKey || issueId;
+  const projectRef = (youtrackBaseUrl && youtrackProjectShortName)
+    ? '<' + youtrackBaseUrl + '/issues/' + youtrackProjectShortName + '|' + projectLabel + '>'
+    : projectLabel;
+
+  const dryRunSuffix = isDryRun ? '  _(dry-run)_' : '';
+
+  const lines = ['🔄 *Sync Jira* — ' + projectRef + '  |  ' + dateStr + dryRunSuffix, ''];
 
   const jiraUrl = jiraKey && jiraBaseUrl ? jiraBaseUrl + '/browse/' + jiraKey : null;
   const jiraRef = jiraUrl ? '<' + jiraUrl + '|' + jiraKey + '>' : (jiraKey || issueId);
@@ -220,15 +236,19 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   // Structured result object — populated throughout the sync pipeline and returned to the
   // caller so it can build a human-readable notification without parsing raw log lines.
   const syncResult = {
-    issueId:      issue.id,
-    issueSummary: issue.summary,
-    jiraKey:      null,
-    jiraBaseUrl:  jiraEndpoint || '',
-    projectKey:   jiraProjectSlug || '',
-    operation:    'skipped',
-    changes:      triggerReason ? triggerReason.split(' | ') : [],
-    errorMsg:     null,
-    timestamp:    new Date()
+    issueId:                  issue.id,
+    issueSummary:             issue.summary,
+    jiraKey:                  null,
+    jiraBaseUrl:              jiraEndpoint || '',
+    projectKey:               jiraProjectSlug || '',
+    youtrackProjectName:      issue.project ? issue.project.name : (jiraProjectSlug || ''),
+    youtrackProjectShortName: issue.project ? issue.project.shortName : '',
+    youtrackBaseUrl:          ctx.settings.youtrackBaseUrl || '',
+    isDryRun:                 syncMode === 'Dry-Run',
+    operation:                'skipped',
+    changes:                  triggerReason ? triggerReason.split(' | ') : [],
+    errorMsg:                 null,
+    timestamp:                new Date()
   };
 
   if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
