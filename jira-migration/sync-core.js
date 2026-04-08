@@ -16,16 +16,10 @@
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 
-// --- NOTIFICATION MESSAGE BUILDER ---
+// --- NOTIFICATION MESSAGE BUILDERS ---
 
 /**
- * Builds a structured, human-readable notification message for a single-issue sync result.
- *
- * Uses mrkdwn syntax (Slack-compatible). Readable as plain text on channels like ntfy
- * that do not process markdown. Sections with no content are omitted automatically.
- * The dry-run indicator is intentionally excluded from the output.
- *
- * @param {Object}   syncResult
+ * Shared syncResult field reference for all builders:
  * @param {string}   syncResult.issueId                  - YouTrack issue ID (e.g. YOU-45)
  * @param {string}   syncResult.issueSummary             - Issue summary text
  * @param {string}   syncResult.jiraKey                  - Jira issue key, or null if unavailable
@@ -39,9 +33,14 @@ const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
  * @param {string[]} syncResult.changes                  - Human-readable change descriptions (for updates)
  * @param {string}   syncResult.errorMsg                 - Error description (for errors and skips)
  * @param {Date}     syncResult.timestamp                - Sync timestamp
- * @returns {string} Formatted notification message string
  */
-const buildSyncMessage = (syncResult) => {
+
+/**
+ * Builds a Slack/ntfy notification message using mrkdwn syntax and emojis.
+ * Readable as plain text on ntfy which does not process markdown.
+ * @returns {string} Formatted mrkdwn message string.
+ */
+const buildSlackMessage = (syncResult) => {
   const {
     projectKey, jiraBaseUrl, issueId, issueSummary, jiraKey, operation, changes, errorMsg, timestamp,
     youtrackProjectName, youtrackProjectShortName, youtrackBaseUrl, isDryRun
@@ -82,6 +81,62 @@ const buildSyncMessage = (syncResult) => {
   }
 
   return lines.join('\n');
+};
+
+/**
+ * Builds a Teams MessageCard payload object for the given sync result.
+ *
+ * Uses only ASCII-safe characters — no emojis — to avoid UTF-8 encoding
+ * issues with YouTrack's http.Connection when posting to Teams Workflows webhooks.
+ * Links use the [text](url) syntax supported in MessageCard activityText fields.
+ * Theme color varies by operation to provide quick visual feedback.
+ *
+ * @returns {{ themeColor: string, title: string, subtitle: string, text: string }}
+ */
+const buildTeamsMessage = (syncResult) => {
+  const {
+    projectKey, jiraBaseUrl, issueId, issueSummary, jiraKey, operation, changes, errorMsg, timestamp,
+    youtrackProjectName, youtrackProjectShortName, youtrackBaseUrl, isDryRun
+  } = syncResult;
+
+  const pad = n => String(n).padStart(2, '0');
+  const d = timestamp instanceof Date ? timestamp : new Date();
+  const dateStr = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+    '  ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+
+  const projectLabel = youtrackProjectName || youtrackProjectShortName || projectKey || issueId;
+  const projectRef = (youtrackBaseUrl && youtrackProjectShortName)
+    ? '[' + projectLabel + '](' + youtrackBaseUrl + '/issues/' + youtrackProjectShortName + ')'
+    : projectLabel;
+
+  const dryRunSuffix = isDryRun ? ' (dry-run)' : '';
+  const title = 'Sync Jira | ' + projectRef + ' | ' + dateStr + dryRunSuffix;
+
+  const jiraUrl = jiraKey && jiraBaseUrl ? jiraBaseUrl + '/browse/' + jiraKey : null;
+  const jiraRef = jiraUrl ? '[' + jiraKey + '](' + jiraUrl + ')' : (jiraKey || issueId);
+
+  let themeColor, subtitle, text;
+
+  if (operation === 'created') {
+    themeColor = '00B050';
+    subtitle   = 'CRIADA';
+    text       = jiraRef + ' - ' + issueSummary;
+  } else if (operation === 'updated') {
+    themeColor = '0076D7';
+    subtitle   = 'ATUALIZADA';
+    const changeStr = changes && changes.length > 0 ? changes.join(' | ') : 'campos atualizados';
+    text = jiraRef + ' - ' + changeStr;
+  } else if (operation === 'error') {
+    themeColor = 'FF0000';
+    subtitle   = 'ERRO';
+    text       = (jiraKey || issueId) + ' - ' + (errorMsg || 'erro desconhecido');
+  } else {
+    themeColor = '808080';
+    subtitle   = 'IGNORADA';
+    text       = issueId + ' - ' + (errorMsg || 'sync ignorado');
+  }
+
+  return { themeColor, title, subtitle, text };
 };
 
 // --- MAPPING HELPERS ---
@@ -460,24 +515,32 @@ const postToWebhook = (webhookUrl, headers, body) => {
   const host = pathStart === -1 ? webhookUrl : webhookUrl.substring(0, pathStart);
   const path = pathStart === -1 ? '/' : webhookUrl.substring(pathStart);
   const connection = new http.Connection(host, null, 5000);
-  return connection.postSync(path, headers, body);
+  // postSync(uri, queryParams, payload) — the second argument is query parameters,
+  // NOT headers. Headers must be registered via addHeader() before the request is sent.
+  Object.keys(headers).forEach(function(name) {
+    connection.addHeader(name, headers[name]);
+  });
+  return connection.postSync(path, null, body);
 };
 
 /**
  * ntfy.sh — plain text POST with Title header.
+ * Reuses the Slack/mrkdwn message builder: ntfy renders it as plain text,
+ * so emojis and mrkdwn symbols are displayed as-is without issues.
  * Works with ntfy.sh (hosted) and self-hosted ntfy instances.
  */
-const notifyNtfy = (topicUrl, issueId, message) => {
+const notifyNtfy = (topicUrl, syncResult) => {
   try {
+    const message = buildSlackMessage(syncResult);
     const response = postToWebhook(topicUrl, {
-      'Title': 'Jira Sync: ' + issueId,
+      'Title': 'Jira Sync: ' + syncResult.issueId,
       'Content-Type': 'text/plain; charset=utf-8'
     }, message);
 
     if (!response || response.code < 200 || response.code >= 300) {
       console.log('[Notify][ntfy] Failed: HTTP ' + (response ? response.code : 'no response'));
     } else {
-      console.log('[Notify][ntfy] Sent for issue: ' + issueId);
+      console.log('[Notify][ntfy] Sent for issue: ' + syncResult.issueId);
     }
   } catch (e) {
     console.log('[Notify][ntfy] Error: ' + e);
@@ -485,19 +548,24 @@ const notifyNtfy = (topicUrl, issueId, message) => {
 };
 
 /**
- * Microsoft Teams — Incoming Webhook using the legacy MessageCard format,
- * which is universally supported by all Teams incoming webhook connectors.
+ * Microsoft Teams — Posts a MessageCard to a Teams Workflows webhook URL.
+ *
+ * Uses buildTeamsMessage which produces ASCII-only content (no emojis) to avoid
+ * UTF-8 encoding failures in YouTrack's http.Connection. Theme color and subtitle
+ * vary by operation for quick visual differentiation in the Teams channel.
  */
-const notifyTeams = (webhookUrl, issueId, message) => {
+const notifyTeams = (webhookUrl, syncResult) => {
   try {
+    const msg = buildTeamsMessage(syncResult);
     const payload = JSON.stringify({
-      '@type': 'MessageCard',
-      '@context': 'http://schema.org/extensions',
-      'summary': 'Jira Sync: ' + issueId,
-      'themeColor': '0076D7',
+      '@type':      'MessageCard',
+      '@context':   'http://schema.org/extensions',
+      'summary':    'Sync Jira: ' + syncResult.issueId,
+      'themeColor': msg.themeColor,
       'sections': [{
-        'activityTitle': 'Jira Sync: ' + issueId,
-        'activityText': message
+        'activityTitle':    msg.title,
+        'activitySubtitle': msg.subtitle,
+        'activityText':     msg.text
       }]
     });
 
@@ -508,7 +576,7 @@ const notifyTeams = (webhookUrl, issueId, message) => {
     if (!response || response.code < 200 || response.code >= 300) {
       console.log('[Notify][Teams] Failed: HTTP ' + (response ? response.code : 'no response'));
     } else {
-      console.log('[Notify][Teams] Sent for issue: ' + issueId);
+      console.log('[Notify][Teams] Sent for issue: ' + syncResult.issueId);
     }
   } catch (e) {
     console.log('[Notify][Teams] Error: ' + e);
@@ -517,9 +585,11 @@ const notifyTeams = (webhookUrl, issueId, message) => {
 
 /**
  * Slack — Incoming Webhook using the blocks API for formatted mrkdwn output.
+ * Uses buildSlackMessage which supports emojis and Slack's mrkdwn link syntax.
  */
-const notifySlack = (webhookUrl, issueId, message) => {
+const notifySlack = (webhookUrl, syncResult) => {
   try {
+    const message = buildSlackMessage(syncResult);
     const payload = JSON.stringify({
       'blocks': [
         {
@@ -536,7 +606,7 @@ const notifySlack = (webhookUrl, issueId, message) => {
     if (!response || response.code < 200 || response.code >= 300) {
       console.log('[Notify][Slack] Failed: HTTP ' + (response ? response.code : 'no response'));
     } else {
-      console.log('[Notify][Slack] Sent for issue: ' + issueId);
+      console.log('[Notify][Slack] Sent for issue: ' + syncResult.issueId);
     }
   } catch (e) {
     console.log('[Notify][Slack] Error: ' + e);
@@ -546,6 +616,7 @@ const notifySlack = (webhookUrl, issueId, message) => {
 /**
  * Dispatches a structured sync notification to the configured external channel.
  * Reads `notificationChannel` from settings and routes to the matching notifier.
+ * Each notifier is responsible for building its own channel-specific message.
  * No-ops when channel is 'Disabled' or syncResult is absent.
  *
  * @param {Object} settings   - ctx.settings from the workflow context.
@@ -555,30 +626,27 @@ const notifyChannel = (settings, syncResult) => {
   const channel = settings.notificationChannel || 'Disabled';
   if (channel === 'Disabled' || !syncResult) return;
 
-  const message = buildSyncMessage(syncResult);
-  const issueId = syncResult.issueId;
-
   if (channel === 'ntfy') {
     if (!settings.ntfyTopicUrl) {
       console.log('[Notify] ntfy selected but ntfyTopicUrl is not configured.');
       return;
     }
-    notifyNtfy(settings.ntfyTopicUrl, issueId, message);
+    notifyNtfy(settings.ntfyTopicUrl, syncResult);
   } else if (channel === 'Teams') {
     if (!settings.teamsWebhookUrl) {
       console.log('[Notify] Teams selected but teamsWebhookUrl is not configured.');
       return;
     }
-    notifyTeams(settings.teamsWebhookUrl, issueId, message);
+    notifyTeams(settings.teamsWebhookUrl, syncResult);
   } else if (channel === 'Slack') {
     if (!settings.slackWebhookUrl) {
       console.log('[Notify] Slack selected but slackWebhookUrl is not configured.');
       return;
     }
-    notifySlack(settings.slackWebhookUrl, issueId, message);
+    notifySlack(settings.slackWebhookUrl, syncResult);
   } else {
     console.log('[Notify] Unknown notification channel: ' + channel);
   }
 };
 
-module.exports = { performSync, notifyChannel, buildSyncMessage };
+module.exports = { performSync, notifyChannel, buildSlackMessage, buildTeamsMessage };
