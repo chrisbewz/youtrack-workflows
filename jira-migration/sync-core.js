@@ -141,22 +141,22 @@ const buildTeamsMessage = (syncResult) => {
 
 // --- MAPPING HELPERS ---
 
-const getJiraStatus = (issue) => {
-  const statusMapping = {
-    'Submitted': 'To Do',
-    'Open': 'To Do',
-    'To be discussed': 'To Do',
-    'Reopened': 'To Do',
-    'In Progress': 'In Progress',
-    'Fixed': 'Done',
-    'Verified': 'Done',
-    'Closed': 'Done',
-    'Can\'t Reproduce': 'Done',
-    'Duplicate': 'Done',
-    'Won\'t fix': 'Done',
-    'Incomplete': 'Done'
+const getJiraStatus = (issue, settings) => {
+  const stateName = issue.fields.State.name;
+
+  // Parse a comma-separated setting string into a trimmed array.
+  // Falls back to the provided defaults when the setting is absent or blank.
+  const parseStates = (raw, defaults) => {
+    const src = (raw && raw.trim()) ? raw : defaults;
+    return src.split(',').map(v => v.trim()).filter(Boolean);
   };
-  return statusMapping[issue.fields.State.name] || 'To Do';
+
+  const doneStates       = parseStates(settings.statusDoneStates,       "Fixed,Verified,Closed,Can't Reproduce,Duplicate,Won't fix,Incomplete");
+  const inProgressStates = parseStates(settings.statusInProgressStates, 'In Progress');
+
+  if (doneStates.indexOf(stateName)       !== -1) return 'Done';
+  if (inProgressStates.indexOf(stateName) !== -1) return 'In Progress';
+  return 'To Do';
 };
 
 const getJiraIssueType = (issue, settings) => {
@@ -179,15 +179,22 @@ const getJiraIssueType = (issue, settings) => {
   return legacyMapping[typeName] || 'Task';
 };
 
-const getJiraPriority = (issue) => {
-  const priorityMapping = {
-    'Show-stopper': 'Highest',
-    'Critical': 'High',
-    'Major': 'Medium',
-    'Normal': 'Medium',
-    'Minor': 'Low'
-  };
-  return priorityMapping[issue.fields.Priority.name] || 'Medium';
+const getJiraPriority = (issue, settings) => {
+  const priorityName = issue.fields.Priority.name;
+
+  // Project-level priority configuration takes priority over the defaults below.
+  // Each setting maps a YouTrack priority name to one of the four standard Jira levels.
+  // Empty/missing settings fall back to the hardcoded default names.
+  if (priorityName === (settings.priorityHighestName || 'Show-stopper')) return 'Highest';
+  if (priorityName === (settings.priorityHighName    || 'Critical'))     return 'High';
+  if (priorityName === (settings.priorityMediumName  || 'Normal'))       return 'Medium';
+  if (priorityName === (settings.priorityLowName     || 'Minor'))        return 'Low';
+
+  // Legacy fallback: 'Major' was historically mapped to 'Medium' and is not
+  // configurable in this version (discussed and deferred in YOU-4).
+  if (priorityName === 'Major') return 'Medium';
+
+  return 'Medium';
 };
 
 const getJiraLabels = (issue) => {
@@ -353,9 +360,9 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   // --- EVALUATED MAPPINGS ---
   // Computed once and reused in both logging and payload building.
   const mappings = {
-    status:     getJiraStatus(issue),
+    status:     getJiraStatus(issue, ctx.settings),
     issueType:  getJiraIssueType(issue, ctx.settings),
-    priority:   getJiraPriority(issue),
+    priority:   getJiraPriority(issue, ctx.settings),
     labels:     getJiraLabels(issue),
     estimation: getJiraEstimation(issue)
   };

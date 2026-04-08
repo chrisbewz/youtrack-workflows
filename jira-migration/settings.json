@@ -105,6 +105,48 @@
       "type": "string",
       "x-scope": "PROJECT",
       "default": "Subtask"
+    },
+    "priorityHighestName": {
+      "title": "YouTrack 'Highest' Priority Name",
+      "description": "YouTrack Priority field value that maps to Highest in Jira. Leave blank to use the default ('Show-stopper').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Show-stopper"
+    },
+    "priorityHighName": {
+      "title": "YouTrack 'High' Priority Name",
+      "description": "YouTrack Priority field value that maps to High in Jira. Leave blank to use the default ('Critical').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Critical"
+    },
+    "priorityMediumName": {
+      "title": "YouTrack 'Medium' Priority Name",
+      "description": "YouTrack Priority field value that maps to Medium in Jira. Leave blank to use the default ('Normal'). Note: 'Major' also maps to Medium as a legacy fallback and is not configurable in this version.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Normal"
+    },
+    "priorityLowName": {
+      "title": "YouTrack 'Low' Priority Name",
+      "description": "YouTrack Priority field value that maps to Low in Jira. Leave blank to use the default ('Minor').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Minor"
+    },
+    "statusDoneStates": {
+      "title": "YouTrack States Mapped to 'Done'",
+      "description": "Comma-separated list of YouTrack State field values that map to Done in Jira. Leave blank to use the default ('Fixed,Verified,Closed,Can't Reproduce,Duplicate,Won't fix,Incomplete').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Fixed,Verified,Closed,Can't Reproduce,Duplicate,Won't fix,Incomplete"
+    },
+    "statusInProgressStates": {
+      "title": "YouTrack States Mapped to 'In Progress'",
+      "description": "Comma-separated list of YouTrack State field values that map to In Progress in Jira. Everything not listed here or in the Done states will map to To Do. Leave blank to use the default ('In Progress').",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "In Progress"
     }
   },
   "required": ["jiraApiToken", "jiraEndpointUrl", "jiraProjectSlug", "syncMode"]
