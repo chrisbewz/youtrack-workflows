@@ -36,17 +36,18 @@ exports.rule = entities.Issue.action({
     const needsCollector = verboseNotify || hasExternalChannel;
     const collector = needsCollector ? [] : null;
 
-    syncCore.performSync(ctx.issue, ctx, 'Manual sync requested by ' + user, true, collector);
+    const syncResult = syncCore.performSync(ctx.issue, ctx, 'Manual sync requested by ' + user, true, collector);
 
     if (collector && collector.length > 0) {
       // Surface logs in the YouTrack UI as a notification popup.
       if (verboseNotify) {
         workflow.message(collector.join('\n'));
       }
-      // Dispatch to the configured external notification channel (ntfy / Teams / Slack).
-      if (hasExternalChannel) {
-        syncCore.notifyChannel(ctx.settings, ctx.issue.id, collector);
-      }
+    }
+
+    // Dispatch a structured notification to the configured external channel (ntfy / Teams / Slack).
+    if (hasExternalChannel && syncResult) {
+      syncCore.notifyChannel(ctx.settings, syncResult);
     }
   },
   requirements: {

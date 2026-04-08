@@ -16,6 +16,58 @@
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 
+// --- NOTIFICATION MESSAGE BUILDER ---
+
+/**
+ * Builds a structured, human-readable notification message for a single-issue sync result.
+ *
+ * Uses mrkdwn syntax (Slack-compatible). Readable as plain text on channels like ntfy
+ * that do not process markdown. Sections with no content are omitted automatically.
+ * The dry-run indicator is intentionally excluded from the output.
+ *
+ * @param {Object}   syncResult
+ * @param {string}   syncResult.issueId      - YouTrack issue ID (e.g. YOU-45)
+ * @param {string}   syncResult.issueSummary - Issue summary text
+ * @param {string}   syncResult.jiraKey      - Jira issue key, or null if unavailable
+ * @param {string}   syncResult.jiraBaseUrl  - Jira instance base URL (no trailing slash)
+ * @param {string}   syncResult.projectKey   - Jira project key (e.g. BACK)
+ * @param {string}   syncResult.operation    - 'created' | 'updated' | 'skipped' | 'error'
+ * @param {string[]} syncResult.changes      - Human-readable change descriptions (for updates)
+ * @param {string}   syncResult.errorMsg     - Error description (for errors and skips)
+ * @param {Date}     syncResult.timestamp    - Sync timestamp
+ * @returns {string} Formatted notification message string
+ */
+const buildSyncMessage = (syncResult) => {
+  const { projectKey, jiraBaseUrl, issueId, issueSummary, jiraKey, operation, changes, errorMsg, timestamp } = syncResult;
+
+  const pad = n => String(n).padStart(2, '0');
+  const d = timestamp instanceof Date ? timestamp : new Date();
+  const dateStr = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+    '  ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+
+  const lines = ['🔄 *Sync Jira* — ' + (projectKey || issueId) + '  |  ' + dateStr, ''];
+
+  const jiraUrl = jiraKey && jiraBaseUrl ? jiraBaseUrl + '/browse/' + jiraKey : null;
+  const jiraRef = jiraUrl ? '<' + jiraUrl + '|' + jiraKey + '>' : (jiraKey || issueId);
+
+  if (operation === 'created') {
+    lines.push('✅ *Criada*');
+    lines.push('  • ' + jiraRef + ' — ' + issueSummary);
+  } else if (operation === 'updated') {
+    lines.push('🔁 *Atualizada*');
+    const changeStr = changes && changes.length > 0 ? changes.join(' | ') : 'campos atualizados';
+    lines.push('  • ' + jiraRef + ' — ' + changeStr);
+  } else if (operation === 'error') {
+    lines.push('⚠️ *Erro*');
+    lines.push('  • ' + (jiraKey || issueId) + ' — ' + (errorMsg || 'erro desconhecido'));
+  } else if (operation === 'skipped') {
+    lines.push('⏭️ *Ignorada*');
+    lines.push('  • ' + issueId + ' — ' + (errorMsg || 'sync ignorado'));
+  }
+
+  return lines.join('\n');
+};
+
 // --- MAPPING HELPERS ---
 
 const getJiraStatus = (issue) => {
@@ -165,14 +217,30 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const jiraApiToken = ctx.settings.jiraApiToken;
   const syncMode = ctx.settings.syncMode || 'Disabled';
 
+  // Structured result object — populated throughout the sync pipeline and returned to the
+  // caller so it can build a human-readable notification without parsing raw log lines.
+  const syncResult = {
+    issueId:      issue.id,
+    issueSummary: issue.summary,
+    jiraKey:      null,
+    jiraBaseUrl:  jiraEndpoint || '',
+    projectKey:   jiraProjectSlug || '',
+    operation:    'skipped',
+    changes:      triggerReason ? triggerReason.split(' | ') : [],
+    errorMsg:     null,
+    timestamp:    new Date()
+  };
+
   if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
     log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
-    return;
+    syncResult.errorMsg = 'configurações obrigatórias ausentes';
+    return syncResult;
   }
 
   if (syncMode === 'Disabled') {
     log('[Jira Sync] Sync disabled for project. Skipping issue: ' + issue.id);
-    return;
+    syncResult.errorMsg = 'sync desabilitado para o projeto';
+    return syncResult;
   }
 
   const JIRA_URL = jiraEndpoint + '/rest/api/3';
@@ -226,29 +294,42 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
         const jiraData = JSON.parse(response.response);
         resolvedJiraKey = jiraData.key;
         issue.fields['Jira ID'] = resolvedJiraKey;
+        syncResult.operation = 'created';
+        syncResult.jiraKey   = resolvedJiraKey;
         workflow.message('Issue migrated to Jira: ' + resolvedJiraKey);
       } else {
         const errMsg = 'Failed to migrate issue to Jira. Error: ' + response.response;
         log('[Jira Sync] ' + errMsg);
+        syncResult.operation = 'error';
+        syncResult.errorMsg  = 'falha ao criar issue: ' + response.response;
         workflow.message(errMsg);
-        return;
+        return syncResult;
       }
     } else {
       const response = connection.putSync('/issue/' + resolvedJiraKey, {}, JSON.stringify(jiraPayload));
       if (response && response.code === 204) {
+        syncResult.operation = 'updated';
+        syncResult.jiraKey   = resolvedJiraKey;
         workflow.message('Jira issue updated: ' + resolvedJiraKey);
       } else {
         const errMsg = 'Failed to update Jira issue ' + resolvedJiraKey + '. Error: ' + response.response;
         log('[Jira Sync] ' + errMsg);
+        syncResult.operation = 'error';
+        syncResult.jiraKey   = resolvedJiraKey;
+        syncResult.errorMsg  = 'falha ao atualizar: ' + response.response;
         workflow.message(errMsg);
-        return;
+        return syncResult;
       }
     }
   } else {
     if (!isUpdate) {
-      resolvedJiraKey = 'DRY-RUN-KEY';
+      resolvedJiraKey      = 'DRY-RUN-KEY';
+      syncResult.operation = 'created';
+      syncResult.jiraKey   = null; // not a real key in dry-run
       log('[Jira Sync][DRY-RUN] Would CREATE new Jira issue.');
     } else {
+      syncResult.operation = 'updated';
+      syncResult.jiraKey   = resolvedJiraKey;
       log('[Jira Sync][DRY-RUN] Would UPDATE Jira issue: ' + resolvedJiraKey);
     }
   }
@@ -310,6 +391,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
       log('[Jira Sync][DRY-RUN] Would transition issue to status: "' + mappings.status + '"');
     }
   }
+
+  return syncResult;
 };
 
 // --- NOTIFICATION HELPERS ---
@@ -356,12 +439,12 @@ const postToWebhook = (webhookUrl, headers, body) => {
  * ntfy.sh — plain text POST with Title header.
  * Works with ntfy.sh (hosted) and self-hosted ntfy instances.
  */
-const notifyNtfy = (topicUrl, issueId, collector) => {
+const notifyNtfy = (topicUrl, issueId, message) => {
   try {
     const response = postToWebhook(topicUrl, {
       'Title': 'Jira Sync: ' + issueId,
       'Content-Type': 'text/plain; charset=utf-8'
-    }, collector.join('\n'));
+    }, message);
 
     if (!response || response.code < 200 || response.code >= 300) {
       console.log('[Notify][ntfy] Failed: HTTP ' + (response ? response.code : 'no response'));
@@ -377,7 +460,7 @@ const notifyNtfy = (topicUrl, issueId, collector) => {
  * Microsoft Teams — Incoming Webhook using the legacy MessageCard format,
  * which is universally supported by all Teams incoming webhook connectors.
  */
-const notifyTeams = (webhookUrl, issueId, collector) => {
+const notifyTeams = (webhookUrl, issueId, message) => {
   try {
     const payload = JSON.stringify({
       '@type': 'MessageCard',
@@ -386,7 +469,7 @@ const notifyTeams = (webhookUrl, issueId, collector) => {
       'themeColor': '0076D7',
       'sections': [{
         'activityTitle': 'Jira Sync: ' + issueId,
-        'activityText': collector.join('\n')
+        'activityText': message
       }]
     });
 
@@ -405,19 +488,15 @@ const notifyTeams = (webhookUrl, issueId, collector) => {
 };
 
 /**
- * Slack — Incoming Webhook using the blocks API for formatted output.
+ * Slack — Incoming Webhook using the blocks API for formatted mrkdwn output.
  */
-const notifySlack = (webhookUrl, issueId, collector) => {
+const notifySlack = (webhookUrl, issueId, message) => {
   try {
     const payload = JSON.stringify({
       'blocks': [
         {
-          'type': 'header',
-          'text': { 'type': 'plain_text', 'text': 'Jira Sync: ' + issueId }
-        },
-        {
           'type': 'section',
-          'text': { 'type': 'mrkdwn', 'text': '```' + collector.join('\n') + '```' }
+          'text': { 'type': 'mrkdwn', 'text': message }
         }
       ]
     });
@@ -437,39 +516,41 @@ const notifySlack = (webhookUrl, issueId, collector) => {
 };
 
 /**
- * Dispatches a sync log notification to the configured external channel.
+ * Dispatches a structured sync notification to the configured external channel.
  * Reads `notificationChannel` from settings and routes to the matching notifier.
- * No-ops when channel is 'Disabled' or collector is empty.
+ * No-ops when channel is 'Disabled' or syncResult is absent.
  *
- * @param {Object} settings  - ctx.settings from the workflow context.
- * @param {string} issueId   - YouTrack issue ID.
- * @param {Array}  collector - Log lines accumulated during the sync run.
+ * @param {Object} settings   - ctx.settings from the workflow context.
+ * @param {Object} syncResult - Structured result object returned by performSync.
  */
-const notifyChannel = (settings, issueId, collector) => {
+const notifyChannel = (settings, syncResult) => {
   const channel = settings.notificationChannel || 'Disabled';
-  if (channel === 'Disabled' || !collector || collector.length === 0) return;
+  if (channel === 'Disabled' || !syncResult) return;
+
+  const message = buildSyncMessage(syncResult);
+  const issueId = syncResult.issueId;
 
   if (channel === 'ntfy') {
     if (!settings.ntfyTopicUrl) {
       console.log('[Notify] ntfy selected but ntfyTopicUrl is not configured.');
       return;
     }
-    notifyNtfy(settings.ntfyTopicUrl, issueId, collector);
+    notifyNtfy(settings.ntfyTopicUrl, issueId, message);
   } else if (channel === 'Teams') {
     if (!settings.teamsWebhookUrl) {
       console.log('[Notify] Teams selected but teamsWebhookUrl is not configured.');
       return;
     }
-    notifyTeams(settings.teamsWebhookUrl, issueId, collector);
+    notifyTeams(settings.teamsWebhookUrl, issueId, message);
   } else if (channel === 'Slack') {
     if (!settings.slackWebhookUrl) {
       console.log('[Notify] Slack selected but slackWebhookUrl is not configured.');
       return;
     }
-    notifySlack(settings.slackWebhookUrl, issueId, collector);
+    notifySlack(settings.slackWebhookUrl, issueId, message);
   } else {
     console.log('[Notify] Unknown notification channel: ' + channel);
   }
 };
 
-module.exports = { performSync, notifyChannel };
+module.exports = { performSync, notifyChannel, buildSyncMessage };
