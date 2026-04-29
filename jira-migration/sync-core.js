@@ -182,19 +182,37 @@ const getJiraIssueType = (issue, settings) => {
 const getJiraPriority = (issue, settings) => {
   const priorityName = issue.fields.Priority.name;
 
-  // Project-level priority configuration takes priority over the defaults below.
-  // Each setting maps a YouTrack priority name to one of the four standard Jira levels.
-  // Empty/missing settings fall back to the hardcoded default names.
-  if (priorityName === (settings.priorityHighestName || 'Show-stopper')) return 'Highest';
-  if (priorityName === (settings.priorityHighName    || 'Critical'))     return 'High';
-  if (priorityName === (settings.priorityMediumName  || 'Normal'))       return 'Medium';
-  if (priorityName === (settings.priorityLowName     || 'Minor'))        return 'Low';
+  // Each tier has two settings:
+  //   priorityXxxName      — the YouTrack field value to match (source)
+  //   priorityXxxNameJira  — the Jira priority name to send in the payload (target)
+  // Both fall back to sensible defaults when left blank.
+  const tiers = [
+    {
+      ytName:   settings.priorityHighestName     || 'Show-stopper',
+      jiraName: settings.priorityHighestNameJira || 'Highest'
+    },
+    {
+      ytName:   settings.priorityHighName     || 'Critical',
+      jiraName: settings.priorityHighNameJira || 'High'
+    },
+    {
+      ytName:   settings.priorityMediumName     || 'Normal',
+      jiraName: settings.priorityMediumNameJira || 'Medium'
+    },
+    {
+      ytName:   settings.priorityLowName     || 'Minor',
+      jiraName: settings.priorityLowNameJira || 'Low'
+    }
+  ];
 
-  // Legacy fallback: 'Major' was historically mapped to 'Medium' and is not
+  const matched = tiers.find(t => t.ytName === priorityName);
+  if (matched) return matched.jiraName;
+
+  // Legacy fallback: 'Major' was historically mapped to Medium and is not
   // configurable in this version (discussed and deferred in YOU-4).
-  if (priorityName === 'Major') return 'Medium';
+  if (priorityName === 'Major') return settings.priorityMediumNameJira || 'Medium';
 
-  return 'Medium';
+  return settings.priorityMediumNameJira || 'Medium';
 };
 
 const getJiraLabels = (issue) => {
@@ -241,21 +259,9 @@ const buildJiraPayload = (issue, components, mappings, projectKey) => {
       summary: issue.summary,
       priority: { name: mappings.priority },
       labels: mappings.labels,
-      description: {
-        type: 'doc',
-        version: 1,
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: issue.description || 'No description provided'
-              }
-            ]
-          }
-        ]
-      },
+      // REST API v2 expects description as a plain string (wiki markup / plain text).
+      // ADF objects are only supported by REST API v3.
+      description: issue.description || 'No description provided',
       issuetype: { name: mappings.issueType }
     }
   };
@@ -301,8 +307,9 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const jiraEndpoint = ctx.settings.jiraEndpointUrl;
   const jiraProjectSlug = ctx.settings.jiraProjectSlug;
   const jiraApiToken = ctx.settings.jiraApiToken;
+
   const syncMode = ctx.settings.syncMode || 'Disabled';
-  const issueSyncMode = ctx.issue.fields["Jira Sync"] || 'Disabled';
+  const issueSyncMode = issue.fields["Jira Sync"].presentation || 'Disabled';
 
   // Structured result object — populated throughout the sync pipeline and returned to the
   // caller so it can build a human-readable notification without parsing raw log lines.
@@ -351,7 +358,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     return syncResult;
   }
 
-  const JIRA_URL = jiraEndpoint + '/rest/api/3';
+  const JIRA_URL = jiraEndpoint + '/rest/api/2';
   const JIRA_PROJECT_KEY = jiraProjectSlug;
 
   // --- TRIGGER SUMMARY ---
@@ -368,8 +375,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     estimation: getJiraEstimation(issue)
   };
 
-  const isDryRun = syncMode === 'Dry-Run' && issueSyncMode === 'Dry-Run';
-  const isSyncDisabled = syncMode === 'Disabled' && issueSyncMode === 'Disabled';
+  const isDryRun = syncMode === 'Dry-Run' | issueSyncMode === 'Dry-Run';
+  const isSyncDisabled = syncMode === 'Disabled' | issueSyncMode === 'Disabled';
   const isSyncEnabled = !isDryRun && !isSyncDisabled;
 
   // --- JIRA CONTEXT ---
@@ -380,7 +387,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   log('[Jira Sync] Mappings → IssueType: ' + mappings.issueType + ' | Priority: ' + mappings.priority + ' | Status: ' + mappings.status);
   log('[Jira Sync] Mappings → Labels: [' + (mappings.labels.length > 0 ? mappings.labels.join(', ') : 'none') + '] | Estimation: ' + (mappings.estimation || 'none'));
   if (issue.fields.Subsystem) {
-    log('[Jira Sync] Mappings → Subsystem: "' + issue.fields.Subsystem.name + '" (component lookup ' + (!isSyncEnabled ? 'skipped in dry-run' : 'will be resolved') + ')');
+    log('[Jira Sync] Mappings → Subsystem: "' + issue.fields.Subsystem.name + '" (component lookup ' + (isSyncEnabled ? 'will be resolved' : 'skipped in dry-run') + ')');
   }
 
   // --- CONNECTION SETUP ---
@@ -388,13 +395,12 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
   connection.addHeader('Content-Type', 'application/json');
 
-  const jiraComponents = !isSyncEnabled ? [] : getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log);
+  const jiraComponents = isSyncEnabled ? getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log) : 'skipped in dry-run';
   const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY);
 
-  if (!isSyncEnabled) {
+  if (isDryRun) {
     log('[Jira Sync][DRY-RUN] Full Jira payload: ' + JSON.stringify(jiraPayload, null, 2));
   }
-
   // --- CREATE OR UPDATE ---
   let resolvedJiraKey = jiraDataKey;
 
@@ -451,19 +457,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     log('[Jira Sync] Comments to migrate: ' + commentCount);
 
     issue.comments.forEach(comment => {
-      const commentPayload = {
-        body: {
-          type: 'doc',
-          version: 1,
-          content: [{
-            type: 'paragraph',
-            content: [{
-              type: 'text',
-              text: comment.text
-            }]
-          }]
-        }
-      };
+      // REST API v2 expects body as a plain string.
+      const commentPayload = { body: comment.text };
       if (!isDryRun) {
         const commentResponse = connection.postSync('/issue/' + resolvedJiraKey + '/comment', {}, JSON.stringify(commentPayload));
         if (!commentResponse || commentResponse.code !== 201) {

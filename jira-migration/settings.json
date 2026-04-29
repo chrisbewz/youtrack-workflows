@@ -6,7 +6,6 @@
       "title": "Jira API Token (Basic Auth)",
       "description": "Jira API token with permissions to access issues via REST API. Generate at https://id.atlassian.com/manage-profile/security/api-tokens.",
       "type": "string",
-      "format": "secret",
       "x-scope": "GLOBAL"
     },
     "jiraEndpointUrl": {
@@ -113,12 +112,26 @@
       "x-scope": "PROJECT",
       "default": "Show-stopper"
     },
+    "priorityHighestNameJira": {
+      "title": "Jira 'Highest' Priority Name",
+      "description": "Exact priority name used in Jira for the Highest tier. Leave blank to use the default ('Highest'). Must match the name shown in your Jira project's priority list.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Highest"
+    },
     "priorityHighName": {
       "title": "YouTrack 'High' Priority Name",
       "description": "YouTrack Priority field value that maps to High in Jira. Leave blank to use the default ('Critical').",
       "type": "string",
       "x-scope": "PROJECT",
       "default": "Critical"
+    },
+    "priorityHighNameJira": {
+      "title": "Jira 'High' Priority Name",
+      "description": "Exact priority name used in Jira for the High tier. Leave blank to use the default ('High'). Must match the name shown in your Jira project's priority list.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "High"
     },
     "priorityMediumName": {
       "title": "YouTrack 'Medium' Priority Name",
@@ -127,12 +140,26 @@
       "x-scope": "PROJECT",
       "default": "Normal"
     },
+    "priorityMediumNameJira": {
+      "title": "Jira 'Medium' Priority Name",
+      "description": "Exact priority name used in Jira for the Medium tier. Leave blank to use the default ('Medium'). Must match the name shown in your Jira project's priority list.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Medium"
+    },
     "priorityLowName": {
       "title": "YouTrack 'Low' Priority Name",
       "description": "YouTrack Priority field value that maps to Low in Jira. Leave blank to use the default ('Minor').",
       "type": "string",
       "x-scope": "PROJECT",
       "default": "Minor"
+    },
+    "priorityLowNameJira": {
+      "title": "Jira 'Low' Priority Name",
+      "description": "Exact priority name used in Jira for the Low tier. Leave blank to use the default ('Low'). Must match the name shown in your Jira project's priority list.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "Low"
     },
     "statusDoneStates": {
       "title": "YouTrack States Mapped to 'Done'",

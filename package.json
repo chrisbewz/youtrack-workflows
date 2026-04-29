@@ -5,10 +5,8 @@
   "scripts": {
     "list-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow list --host=$npm_config_host_prod --token=$npm_config_token_prod",
     "download-prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow download --host=$npm_config_host_prod --token=$npm_config_token_prod",
-
     "upload-jira-migration:prod": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload ./jira-migration --host=$npm_config_host_prod --token=$npm_config_token_prod",
     "upload-jira-migration:test": "cross-env NODE_TLS_REJECT_UNAUTHORIZED=0 cross-var youtrack-workflow upload ./jira-migration --host=$npm_config_host_test --token=$npm_config_token_test",
-
     "echo-prd": "cross-var echo \"$npm_config_host_prod > $npm_config_token_prod\"",
     "echo-test": "cross-var echo \"$npm_config_host_test > $npm_config_token_test\""
   },
@@ -19,5 +17,8 @@
     "@jetbrains/youtrack-scripting-api": "^2022.1.46592",
     "cross-env": "^10.1.0",
     "cross-var": "^1.1.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
   }
 }
