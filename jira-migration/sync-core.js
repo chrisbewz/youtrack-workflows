@@ -252,16 +252,15 @@ const getJiraEstimation = (issue) => {
   return null;
 };
 
-const buildJiraPayload = (issue, components, mappings, projectKey) => {
+const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
   const payload = {
     fields: {
       project: { key: projectKey },
       summary: issue.summary,
       priority: { name: mappings.priority },
       labels: mappings.labels,
-      // REST API v2 expects description as a plain string (wiki markup / plain text).
-      // ADF objects are only supported by REST API v3.
-      description: issue.description || 'No description provided',
+      // Use transformed description instead of raw
+      description: buildJiraDescription(issue, ctx),
       issuetype: { name: mappings.issueType }
     }
   };
@@ -395,8 +394,11 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
   connection.addHeader('Content-Type', 'application/json');
 
-  const jiraComponents = isSyncEnabled ? getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log) : 'skipped in dry-run';
-  const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY);
+  const jiraComponents = isSyncEnabled
+      ? getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log)
+      : 'skipped in dry-run';
+
+  const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY, ctx);
 
   if (isDryRun) {
     log('[Jira Sync][DRY-RUN] Full Jira payload: ' + JSON.stringify(jiraPayload, null, 2));
@@ -753,6 +755,114 @@ const notifyChannel = (settings, syncResult) => {
   } else {
     console.log('[Notify] Unknown notification channel: ' + channel);
   }
+};
+
+// --- DESCRIPTION TRANSFORMERS ---
+
+/**
+ * Converts YouTrack Markdown-ish description into Jira wiki markup for REST v2,
+ * and applies project-specific mention mapping.
+ *
+ * If you later move to Jira REST v3 + ADF, this is the place to switch formats.
+ */
+const buildJiraDescription = (issue, ctx) => {
+  const raw = issue.description || 'No description provided';
+
+  // 1) Markdown → Jira wiki
+  let text = markdownToJiraWiki(raw);
+
+  // 2) Mentions → Jira mentions
+  text = applyJiraMentionMapping(text, ctx.settings);
+
+  return text;
+};
+
+/**
+ * Very small Markdown-to-Jira-wiki converter.
+ * Not a full parser, just the common patterns you’re likely to use.
+ */
+const markdownToJiraWiki = (src) => {
+  let text = src;
+
+  // Code blocks: ```lang\ncode\n``` → {code:lang} ... {code}
+  text = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => {
+    const langPart = lang ? ':' + lang : '';
+    // Jira expects CRLFs or LFs, both generally okay
+    return '{code' + langPart + '}\n' + code.trimEnd() + '\n{code}';
+  });
+
+  // Inline code: `code` → {{code}}
+  text = text.replace(/`([^`]+)`/g, '{{$1}}');
+
+  // Headings: # H1 → h1. H1
+  text = text.replace(/^######\s+(.*)$/gm, 'h6. $1');
+  text = text.replace(/^#####\s+(.*)$/gm, 'h5. $1');
+  text = text.replace(/^####\s+(.*)$/gm, 'h4. $1');
+  text = text.replace(/^###\s+(.*)$/gm, 'h3. $1');
+  text = text.replace(/^##\s+(.*)$/gm, 'h2. $1');
+  text = text.replace(/^#\s+(.*)$/gm, 'h1. $1');
+
+  // Bold: **text** → *text*
+  text = text.replace(/\*\*(.+?)\*\*/g, '*$1*');
+
+  // Italic: _text_ or *text* → _text_
+  // (be a bit conservative to avoid fighting with bold)
+  text = text.replace(/(^|[^\*])\*(?!\*)([^*\n]+)\*(?!\*)/g, '$1_$2_');
+  text = text.replace(/_([^_\n]+)_/g, '_$1_'); // mostly idempotent
+
+  // Links: [text](url) → [text|url]
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '[$1|$2]');
+
+  // Lists: Markdown "-" is already acceptable to Jira wiki.
+  // If you want to force "*" instead:
+  // text = text.replace(/^\s*-\s+/gm, '* ');
+
+  return text;
+};
+
+/**
+ * Rewrites special mention markers in the description into Jira wiki mentions.
+ *
+ * Supported patterns (you can adjust as you like):
+ *   - [@jira:some.user]       → [~some.user]
+ *   - @ytLogin                → [~jiraUser] using a mapping from settings
+ *
+ * Mapping in settings:
+ *   ctx.settings.jiraUserMappingJson = '{"yt.login":"jira.user","other":"other.jira"}'
+ */
+const applyJiraMentionMapping = (src, settings) => {
+  let text = src || '';
+
+  // 1) Explicit Jira markers: [@jira:john.doe] → [~john.doe]
+  text = text.replace(/\[@jira:([^\]]+)\]/g, (full, jiraUser) => {
+    return `[~${jiraUser.trim()}]`;
+  });
+
+  // 2) Optional YT-login → Jira-user mapping on plain @login
+  //    Example: @cbewzenko → [~christian.bewzenko]
+  let map = null;
+  if (settings && settings.jiraUserMappingJson) {
+    try {
+      map = JSON.parse(settings.jiraUserMappingJson);
+    } catch (e) {
+      console.log('[Jira Sync] Failed to parse jiraUserMappingJson: ' + e);
+    }
+  }
+
+  if (map) {
+    // Very conservative @word detector to avoid matching emails, etc.
+    text = text.replace(/(^|\s)@([a-zA-Z0-9._-]+)/g, (full, prefix, ytLogin) => {
+      // Skip obvious email patterns: @user.domain
+      if (/\./.test(ytLogin) && prefix !== ' ') return full;
+
+      const jiraUser = map[ytLogin];
+      if (!jiraUser) return full;
+
+      return prefix + `[~${jiraUser}]`;
+    });
+  }
+
+  return text;
 };
 
 module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage };
