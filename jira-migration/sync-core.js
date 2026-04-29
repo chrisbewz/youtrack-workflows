@@ -302,6 +302,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const jiraProjectSlug = ctx.settings.jiraProjectSlug;
   const jiraApiToken = ctx.settings.jiraApiToken;
   const syncMode = ctx.settings.syncMode || 'Disabled';
+  const issueSyncMode = ctx.issue.fields["Jira Sync"] || 'Disabled';
 
   // Structured result object — populated throughout the sync pipeline and returned to the
   // caller so it can build a human-readable notification without parsing raw log lines.
@@ -315,6 +316,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     youtrackProjectShortName: issue.project ? issue.project.shortName : '',
     youtrackBaseUrl:          ctx.settings.youtrackBaseUrl || '',
     isDryRun:                 syncMode === 'Dry-Run',
+    issueIsDryRun:            issueSyncMode === 'Dry-Run',
     operation:                'skipped',
     changes:                  triggerReason ? triggerReason.split(' | ') : [],
     errorMsg:                 null,
@@ -351,10 +353,9 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
 
   const JIRA_URL = jiraEndpoint + '/rest/api/3';
   const JIRA_PROJECT_KEY = jiraProjectSlug;
-  const isDryRun = syncMode === 'Dry-Run';
 
   // --- TRIGGER SUMMARY ---
-  log('[Jira Sync] Triggered for issue: ' + issue.id + ' | Mode: ' + syncMode);
+  log('[Jira Sync] Triggered for issue: ' + issue.id + ' | Mode: ' + syncMode + ' | Issue Sync Mode: ' + issueSyncMode);
   log('[Jira Sync] Reason: ' + (triggerReason || 'unspecified'));
 
   // --- EVALUATED MAPPINGS ---
@@ -367,6 +368,10 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     estimation: getJiraEstimation(issue)
   };
 
+  const isDryRun = syncMode === 'Dry-Run' && issueSyncMode === 'Dry-Run';
+  const isSyncDisabled = syncMode === 'Disabled' && issueSyncMode === 'Disabled';
+  const isSyncEnabled = !isDryRun && !isSyncDisabled;
+
   // --- JIRA CONTEXT ---
   const jiraDataKey = issue.fields['Jira ID'] || null;
   const isUpdate = !!jiraDataKey;
@@ -375,7 +380,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   log('[Jira Sync] Mappings → IssueType: ' + mappings.issueType + ' | Priority: ' + mappings.priority + ' | Status: ' + mappings.status);
   log('[Jira Sync] Mappings → Labels: [' + (mappings.labels.length > 0 ? mappings.labels.join(', ') : 'none') + '] | Estimation: ' + (mappings.estimation || 'none'));
   if (issue.fields.Subsystem) {
-    log('[Jira Sync] Mappings → Subsystem: "' + issue.fields.Subsystem.name + '" (component lookup ' + (isDryRun ? 'skipped in dry-run' : 'will be resolved') + ')');
+    log('[Jira Sync] Mappings → Subsystem: "' + issue.fields.Subsystem.name + '" (component lookup ' + (!isSyncEnabled ? 'skipped in dry-run' : 'will be resolved') + ')');
   }
 
   // --- CONNECTION SETUP ---
@@ -383,17 +388,17 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
   connection.addHeader('Content-Type', 'application/json');
 
-  const jiraComponents = isDryRun ? [] : getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log);
+  const jiraComponents = !isSyncEnabled ? [] : getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log);
   const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY);
 
-  if (isDryRun) {
+  if (!isSyncEnabled) {
     log('[Jira Sync][DRY-RUN] Full Jira payload: ' + JSON.stringify(jiraPayload, null, 2));
   }
 
   // --- CREATE OR UPDATE ---
   let resolvedJiraKey = jiraDataKey;
 
-  if (!isDryRun) {
+  if (isSyncEnabled) {
     if (!isUpdate) {
       const response = connection.postSync('/issue', {}, JSON.stringify(jiraPayload));
       if (response && response.code === 201) {
@@ -476,7 +481,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   // where every sync should attempt to align the Jira status with the current YouTrack state).
   const shouldTransition = stateChanged !== false;
   if (shouldTransition && mappings.status !== 'To Do') {
-    if (!isDryRun) {
+    if (isSyncEnabled) {
       const transitionsResponse = connection.getSync('/issue/' + resolvedJiraKey + '/transitions');
       if (transitionsResponse && transitionsResponse.code === 200) {
         const transitions = JSON.parse(transitionsResponse.response).transitions;
