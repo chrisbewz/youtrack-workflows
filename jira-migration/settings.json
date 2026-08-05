@@ -162,6 +162,13 @@
       "x-scope": "PROJECT",
       "default": "image/png,image/jpeg,application/pdf,text/plain"
     },
+    "articleAttachmentPrefix": {
+      "title": "Jira Article Attachment Prefix",
+      "description": "Optional prefix for Markdown files generated from referenced YouTrack articles. Empty keeps the original article ID as the filename.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": ""
+    },
     "priorityHighestName": {
       "title": "YouTrack 'Highest' Priority Name",
       "description": "YouTrack Priority field value that maps to Highest in Jira. Leave blank to use the default ('Show-stopper').",

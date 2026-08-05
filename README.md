@@ -170,6 +170,7 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 | `versionLabelPrefix` | Reserved prefix for fallback labels managed by the workflow. Default: `yt-version-`. | ✗ |
 | `attachmentMaxSizeKb` | Maximum size per attachment. Default: `5120` KB. | ✗ |
 | `attachmentAllowedMimeTypes` | Comma-separated MIME whitelist. Defaults to PNG, JPEG, PDF, and plain text. | ✗ |
+| `articleAttachmentPrefix` | Optional prefix for Markdown files generated from referenced YouTrack articles. Empty by default. | ✗ |
 
 Example link mapping:
 
@@ -251,6 +252,8 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 | `jira-link-sync-action.js` | `action` | "Sync Jira Links" button | Reconcile mapped links for the issue and immediate children |
 | `jira-label-sync-action.js` | `action` | "Sync Jira Labels" button | Add Jira labels as YouTrack tags, creating missing tags |
 | `jira-attachment-sync.js` | `onChange` | A new attachment is added to an opted-in issue | Upload accepted attachments to Jira via multipart |
+| `jira-article-sync.js` | `onChange` | Description or Jira ID changes | Reconcile referenced YouTrack articles as Jira Markdown attachments |
+| `jira-article-update-sync.js` | `Article.onChange` | A tracked article title or body changes | Refresh the Markdown attachment for known consumer issues |
 | `jira-migration-schedule.js` | `onSchedule` (×2) | Daily 03:00 / 03:30 | Bulk sync of unsynced issues; bulk status check of synced issues |
 
 **Tracked field changes** (onChange rule):
@@ -323,8 +326,13 @@ Comments are pushed to Jira once, during the initial CREATE. Subsequent comment 
 ### Status transitions depend on Jira workflow
 If the Jira project's workflow does not expose a transition to the target status from the issue's current status, the transition is silently skipped and a warning is logged. No error is returned to the user.
 
-### No attachment migration
-File attachments are not transferred from YouTrack to Jira.
+### Referenced knowledge-base articles
+
+Article IDs in the form `PROJECT-A-123` found in an issue description are resolved through the YouTrack workflow API and uploaded to the linked Jira issue as Markdown. The default filename is the original article ID plus `.md`; `articleAttachmentPrefix` can prepend an optional project-specific value.
+
+The app stores the YouTrack article version and returned Jira attachment ID in app-owned extension properties. This avoids mandatory custom fields and lets article changes replace the previous Jira attachment. Removing the reference removes the tracked Jira attachment. Upload always happens before replacement deletion, and `Disabled`/`Dry-Run` modes are respected.
+
+The current slice supports Markdown only. HTML and PDF rendering are intentionally separate follow-up items because YouTrack does not expose a documented workflow API for its UI PDF exporter.
 
 ### Priority and type names are case-sensitive
 Jira rejects payloads with unknown priority or issue type names. Values must match exactly what is configured in the target Jira project. Use the `priorityXxxNameJira` settings to align names when they differ from the defaults.

@@ -1,0 +1,21 @@
+{
+  "entityTypeExtensions": [
+    {
+      "entityType": "Issue",
+      "properties": {
+        "jiraArticleAttachments": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "entityType": "Article",
+      "properties": {
+        "jiraMarkdownConsumers": {
+          "type": "Issue",
+          "multi": true
+        }
+      }
+    }
+  ]
+}
