@@ -147,7 +147,8 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 |---|---|---|
 | `jiraApiToken` | Base64-encoded `email:api_token` for Jira Basic Auth. | ✅ |
 | `jiraEndpointUrl` | Jira base URL without trailing slash (e.g. `https://your-company.atlassian.net`). | ✅ |
-| `youtrackBaseUrl` | YouTrack base URL. Used to generate project links in notifications. | ✗ |
+| `youtrackBaseUrl` | YouTrack base URL. Used by notifications and manual Jira label synchronization. | Required for label sync |
+| `youtrackApiToken` | Permanent token used by manual label sync to find, create, and attach tags. Its owner needs the relevant tag permissions. | Required for label sync |
 | `verboseNotify` | When enabled, the full sync log is surfaced as a YouTrack notification popup on manual syncs. Useful in YouTrack Cloud where server logs are not accessible. | ✗ |
 | `notificationChannel` | External channel for sync notifications: `Disabled`, `ntfy`, `Teams`, `Slack`. | ✗ |
 | `ntfyTopicUrl` | Full ntfy topic URL (e.g. `https://ntfy.sh/your-topic`). Required when channel is `ntfy`. | ✗ |
@@ -245,6 +246,7 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 | `jira-migration-action.js` | `action` | "Sync to Jira" button | Manual or forced re-sync |
 | `jira-migration-check-action.js` | `action` | "Check Jira Status" button | Fetch Jira status and update `Jira State` |
 | `jira-link-sync-action.js` | `action` | "Sync Jira Links" button | Reconcile mapped links for the issue and immediate children |
+| `jira-label-sync-action.js` | `action` | "Sync Jira Labels" button | Add Jira labels as YouTrack tags, creating missing tags |
 | `jira-migration-schedule.js` | `onSchedule` (×2) | Daily 03:00 / 03:30 | Bulk sync of unsynced issues; bulk status check of synced issues |
 
 **Tracked field changes** (onChange rule):
@@ -259,6 +261,10 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 Version synchronization is opt-in. When `youtrackVersionFieldName` is configured, the workflow reads that single- or multi-value YouTrack field and lists the versions available in the target Jira project. Matching names are written by ID to `jiraVersionFieldId`. Values without a matching editable Jira version field/value use a managed label such as `yt-version-release-3`.
 
 The workflow never creates Jira project versions. Creating versions requires additional Jira project-administration permission; versions should be provisioned separately. On initial issue creation, field edit metadata is not yet available, so the safe fallback is a managed label. A subsequent update migrates matching values to the configured version field and removes the obsolete managed label.
+
+### Manual label synchronization
+
+The `Sync Jira Labels` action is available only on reported issues with `Jira Sync: Enabled` and a `Jira ID`. It reads the Jira `labels` field and adds exact-name YouTrack tags. Missing tags are created through the YouTrack REST API using `youtrackApiToken`. The operation is additive: it never removes existing YouTrack tags.
 
 ---
 
