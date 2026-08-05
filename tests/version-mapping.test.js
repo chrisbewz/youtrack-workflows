@@ -57,6 +57,16 @@ test('YOU-15 safely falls back to labels when Jira metadata is unavailable', () 
   assert.equal(logs.length, 1);
 });
 
+test('YOU-15 safely falls back when Jira returns malformed version JSON', () => {
+  const connection = { getSync: () => ({ code: 200, response: '{invalid' }) };
+  const logs = [];
+
+  const context = loadJiraVersionContext(connection, 'PRJ', null, 'fixVersions', message => logs.push(message));
+
+  assert.deepEqual(context, { jiraVersions: [], existingLabels: [], jiraFieldAvailable: false });
+  assert.match(logs[0], /inválida/);
+});
+
 test('YOU-15 prefers an available Jira version field over managed labels', () => {
   const plan = buildVersionPlan({
     versionNames: ['1.2.0'],

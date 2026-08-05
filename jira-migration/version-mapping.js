@@ -67,7 +67,14 @@ const buildVersionPlan = options => {
   };
 };
 
-const parseResponse = response => JSON.parse(response.response || 'null');
+const parseResponse = (response, log, subject) => {
+  try {
+    return JSON.parse(response.response || 'null');
+  } catch (error) {
+    log('[Jira Sync] Resposta inválida ao ler ' + subject + ': ' + error.message);
+    return null;
+  }
+};
 
 // Jira Cloud REST API v2 project versions and edit metadata:
 // https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-project-versions/
@@ -76,7 +83,7 @@ const loadJiraVersionContext = (connection, projectKey, jiraKey, jiraFieldId, lo
   const context = { jiraVersions: [], existingLabels: [], jiraFieldAvailable: false };
   const versionsResponse = connection.getSync('/project/' + encodeURIComponent(projectKey) + '/versions');
   if (versionsResponse && versionsResponse.code === 200) {
-    context.jiraVersions = parseResponse(versionsResponse) || [];
+    context.jiraVersions = parseResponse(versionsResponse, log, 'versões do Jira') || [];
   } else {
     log('[Jira Sync] Não foi possível listar versões do projeto; usando labels como fallback.');
   }
@@ -88,7 +95,7 @@ const loadJiraVersionContext = (connection, projectKey, jiraKey, jiraFieldId, lo
     { fields: 'labels' }
   );
   if (issueResponse && issueResponse.code === 200) {
-    const jiraIssue = parseResponse(issueResponse) || {};
+    const jiraIssue = parseResponse(issueResponse, log, 'labels do Jira') || {};
     context.existingLabels = jiraIssue.fields && jiraIssue.fields.labels || [];
   } else {
     log('[Jira Sync] Não foi possível ler labels existentes para sincronização de versão.');
@@ -96,7 +103,7 @@ const loadJiraVersionContext = (connection, projectKey, jiraKey, jiraFieldId, lo
 
   const metadataResponse = connection.getSync('/issue/' + encodeURIComponent(jiraKey) + '/editmeta');
   if (metadataResponse && metadataResponse.code === 200) {
-    const metadata = parseResponse(metadataResponse) || {};
+    const metadata = parseResponse(metadataResponse, log, 'metadados de edição do Jira') || {};
     context.jiraFieldAvailable = !!(metadata.fields && metadata.fields[jiraFieldId]);
   } else {
     log('[Jira Sync] Não foi possível validar o campo de versão no Jira; usando labels como fallback.');
