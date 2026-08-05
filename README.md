@@ -163,6 +163,9 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 | `overrideCompleted` | When `true`, syncs issues even if `Jira State` is `Closed`. Default: `false`. | ✗ |
 | `linkSyncMode` | Link synchronization default: `Disabled`, `Dry-Run`, `Additive`, or `Bidirectional`. Default: `Disabled`. | ✗ |
 | `linkTypeMappingJson` | JSON mapping YouTrack link directions to Jira link types and sides. Default: `{}`. | ✗ |
+| `youtrackVersionFieldName` | Exact name of the optional YouTrack version/release field. Blank disables version synchronization. | ✗ |
+| `jiraVersionFieldId` | Jira version-picker field ID. Default: `fixVersions`; custom version fields use IDs such as `customfield_12345`. | ✗ |
+| `versionLabelPrefix` | Reserved prefix for fallback labels managed by the workflow. Default: `yt-version-`. | ✗ |
 
 Example link mapping:
 
@@ -248,7 +251,14 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 - `summary`, `description`
 - `State`, `Priority`, `Type`, `Estimation`, `Subsystem`
 - Tags
+- The project-configured version field, when `youtrackVersionFieldName` is set
 - `becomesReported` (new issue)
+
+### Version mapping
+
+Version synchronization is opt-in. When `youtrackVersionFieldName` is configured, the workflow reads that single- or multi-value YouTrack field and lists the versions available in the target Jira project. Matching names are written by ID to `jiraVersionFieldId`. Values without a matching editable Jira version field/value use a managed label such as `yt-version-release-3`.
+
+The workflow never creates Jira project versions. Creating versions requires additional Jira project-administration permission; versions should be provisioned separately. On initial issue creation, field edit metadata is not yet available, so the safe fallback is a managed label. A subsequent update migrates matching values to the configured version field and removes the obsolete managed label.
 
 ---
 
