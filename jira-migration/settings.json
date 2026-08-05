@@ -120,6 +120,27 @@
       "x-scope": "PROJECT",
       "default": "{}"
     },
+    "youtrackVersionFieldName": {
+      "title": "YouTrack Version Field Name",
+      "description": "Optional exact name of the YouTrack version/release field to synchronize. Leave blank to disable version synchronization.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": ""
+    },
+    "jiraVersionFieldId": {
+      "title": "Jira Version Field ID",
+      "description": "Jira field ID that receives matching project versions. Use fixVersions for the standard Fix Version/s field.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "fixVersions"
+    },
+    "versionLabelPrefix": {
+      "title": "Jira Version Label Prefix",
+      "description": "Prefix reserved for labels created by version synchronization when no matching editable Jira version field/value is available.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "yt-version-"
+    },
     "priorityHighestName": {
       "title": "YouTrack 'Highest' Priority Name",
       "description": "YouTrack Priority field value that maps to Highest in Jira. Leave blank to use the default ('Show-stopper').",
