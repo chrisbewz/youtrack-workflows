@@ -102,4 +102,39 @@ const normalizeYouTrackLinks = (issue, mapping) => {
   return { state, targets, skipped };
 };
 
-module.exports = { parseLinkTypeMapping, normalizeJiraLinks, normalizeYouTrackLinks };
+const resolveLinkOperation = (currentJiraKey, operation, mapping) => {
+  const symmetric = operation.pair.indexOf('|') !== -1;
+  const separator = symmetric ? '|' : '>';
+  const endpoints = operation.pair.split(separator);
+  const outwardKey = endpoints[0];
+  const inwardKey = endpoints[1];
+  if (currentJiraKey !== outwardKey && currentJiraKey !== inwardKey) {
+    throw new Error('Issue ' + currentJiraKey + ' não pertence ao par ' + operation.pair);
+  }
+
+  const currentSide = currentJiraKey === outwardKey ? 'outward' : 'inward';
+  const entry = Object.keys(mapping).sort()
+    .map(linkName => ({ linkName, ...mapping[linkName] }))
+    .find(candidate => candidate.jiraType === operation.link &&
+      (symmetric ? candidate.symmetric : candidate.jiraSide === currentSide));
+  if (!entry) {
+    throw new Error('Mapeamento reverso ausente para ' + operation.link + ' (' + currentSide + ')');
+  }
+
+  return {
+    linkName: entry.linkName,
+    targetJiraKey: currentJiraKey === outwardKey ? inwardKey : outwardKey,
+    jiraPayload: {
+      type: { name: operation.link },
+      outwardIssue: { key: outwardKey },
+      inwardIssue: { key: inwardKey }
+    }
+  };
+};
+
+module.exports = {
+  parseLinkTypeMapping,
+  normalizeJiraLinks,
+  normalizeYouTrackLinks,
+  resolveLinkOperation
+};
