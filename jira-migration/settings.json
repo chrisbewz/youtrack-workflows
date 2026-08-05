@@ -17,10 +17,16 @@
     },
     "youtrackBaseUrl": {
       "title": "YouTrack URL",
-      "description": "YouTrack instance base URL, without trailing slash. Used to build project links in sync notifications.",
+      "description": "YouTrack instance base URL, without trailing slash. Used to build project links in sync notifications and by manual label synchronization.",
       "type": "string",
       "x-scope": "GLOBAL",
       "examples": ["https://your-company.youtrack.cloud"]
+    },
+    "youtrackApiToken": {
+      "title": "YouTrack Permanent Token",
+      "description": "Permanent token used only by manual Jira label synchronization to find, create, and attach YouTrack tags. The token owner needs the corresponding tag permissions.",
+      "type": "string",
+      "x-scope": "GLOBAL"
     },
     "verboseNotify": {
       "title": "Verbose Notifications",
