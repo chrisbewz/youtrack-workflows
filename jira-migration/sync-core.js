@@ -16,6 +16,7 @@
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
+const { evaluateSyncDecision, getFieldValueName, getSubtasksToSync } = require('./sync-decisions');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -233,7 +234,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const jiraApiToken = ctx.settings.jiraApiToken;
 
   const syncMode = ctx.settings.syncMode || 'Disabled';
-  const issueSyncMode = issue.fields["Jira Sync"].presentation || 'Disabled';
+  const issueSyncMode = getFieldValueName(issue.fields['Jira Sync']) || 'Enabled';
+  const syncDecision = evaluateSyncDecision(issue, ctx.settings);
 
   // Structured result object — populated throughout the sync pipeline and returned to the
   // caller so it can build a human-readable notification without parsing raw log lines.
@@ -246,7 +248,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     youtrackProjectName:      issue.project ? issue.project.name : (jiraProjectSlug || ''),
     youtrackProjectShortName: issue.project ? issue.project.shortName : '',
     youtrackBaseUrl:          ctx.settings.youtrackBaseUrl || '',
-    isDryRun:                 syncMode === 'Dry-Run',
+    isDryRun:                 syncDecision.isDryRun,
     issueIsDryRun:            issueSyncMode === 'Dry-Run',
     operation:                'skipped',
     changes:                  triggerReason ? triggerReason.split(' | ') : [],
@@ -254,15 +256,15 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     timestamp:                new Date()
   };
 
-  if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
-    log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
-    syncResult.errorMsg = 'configurações obrigatórias ausentes';
+  if (!syncDecision.shouldSync) {
+    log('[Jira Sync] ' + syncDecision.reason + '. Skipping issue: ' + issue.id);
+    syncResult.errorMsg = syncDecision.reason;
     return syncResult;
   }
 
-  if (syncMode === 'Disabled') {
-    log('[Jira Sync] Sync disabled for project. Skipping issue: ' + issue.id);
-    syncResult.errorMsg = 'sync desabilitado para o projeto';
+  if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
+    log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
+    syncResult.errorMsg = 'configurações obrigatórias ausentes';
     return syncResult;
   }
 
@@ -299,9 +301,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     estimation: getJiraEstimation(issue)
   };
 
-  const isDryRun = syncMode === 'Dry-Run' | issueSyncMode === 'Dry-Run';
-  const isSyncDisabled = syncMode === 'Disabled' | issueSyncMode === 'Disabled';
-  const isSyncEnabled = !isDryRun && !isSyncDisabled;
+  const isDryRun = syncDecision.isDryRun;
+  const isSyncEnabled = !isDryRun;
 
   // --- JIRA CONTEXT ---
   const jiraDataKey = issue.fields['Jira ID'] || null;
@@ -790,4 +791,4 @@ const applyJiraMentionMapping = (src, settings) => {
   return text;
 };
 
-module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage };
+module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };
