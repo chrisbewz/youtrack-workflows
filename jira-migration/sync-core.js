@@ -15,7 +15,7 @@
 
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
-const { getJiraStatus, getJiraIssueType, getJiraPriority } = require('./sync-mappings');
+const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -500,7 +500,7 @@ const checkJiraStatus = (issue, ctx, collector) => {
   const jiraIssue       = JSON.parse(response.response);
   const statusCategory  = jiraIssue.fields.status.statusCategory.key; // 'new' | 'indeterminate' | 'done'
   const statusName      = jiraIssue.fields.status.name;
-  const isClosed        = statusCategory === 'done';
+  const isClosed        = isJiraStatusClosed(statusCategory);
 
   log('[Jira Check] ' + issue.id + ' → Jira ' + jiraKey + ' status: "' + statusName + '" (category: ' + statusCategory + ') → Jira Closed: ' + isClosed);
 

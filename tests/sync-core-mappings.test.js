@@ -51,3 +51,12 @@ test('YOU-8 maps configured types and preserves legacy and unknown fallbacks', (
   assert.equal(getJiraIssueType(issueWith({ type: 'Bug' }), settings), 'Bug');
   assert.equal(getJiraIssueType(issueWith({ type: 'Unknown' }), settings), 'Task');
 });
+
+test('YOU-10 treats only Jira done status category as closed', () => {
+  const { isJiraStatusClosed } = mappings;
+
+  assert.equal(isJiraStatusClosed('done'), true);
+  assert.equal(isJiraStatusClosed('new'), false);
+  assert.equal(isJiraStatusClosed('indeterminate'), false);
+  assert.equal(isJiraStatusClosed(undefined), false);
+});

@@ -59,4 +59,6 @@ const getJiraPriority = (issue, settings) => {
   return settings.priorityMediumNameJira || 'Medium';
 };
 
-module.exports = { getJiraStatus, getJiraIssueType, getJiraPriority };
+const isJiraStatusClosed = statusCategory => statusCategory === 'done';
+
+module.exports = { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed };
