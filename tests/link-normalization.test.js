@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const {
   parseLinkTypeMapping,
   normalizeJiraLinks,
-  normalizeYouTrackLinks
+  normalizeYouTrackLinks,
+  resolveLinkOperation
 } = require('../jira-migration/link-normalization');
 
 const mappingJson = JSON.stringify({
@@ -73,4 +74,34 @@ test('YOU-16 normalizes only eligible YouTrack links', () => {
     { linkName: 'relates to', reason: 'target sem Jira ID' },
     { linkName: 'relates to', reason: 'target com Jira Sync diferente de Enabled' }
   ]);
+});
+
+test('YOU-16 resolves canonical operations to Jira payload and YouTrack direction', () => {
+  const mapping = parseLinkTypeMapping(mappingJson);
+  const outward = resolveLinkOperation('PRJ-1', {
+    pair: 'PRJ-1>PRJ-2',
+    link: 'Blocks'
+  }, mapping);
+  const inward = resolveLinkOperation('PRJ-2', {
+    pair: 'PRJ-1>PRJ-2',
+    link: 'Blocks'
+  }, mapping);
+  const symmetric = resolveLinkOperation('PRJ-1', {
+    pair: 'PRJ-1|PRJ-3',
+    link: 'Relates'
+  }, mapping);
+
+  assert.deepEqual(outward, {
+    linkName: 'is required for',
+    targetJiraKey: 'PRJ-2',
+    jiraPayload: {
+      type: { name: 'Blocks' },
+      outwardIssue: { key: 'PRJ-1' },
+      inwardIssue: { key: 'PRJ-2' }
+    }
+  });
+  assert.equal(inward.linkName, 'depends on');
+  assert.equal(inward.targetJiraKey, 'PRJ-1');
+  assert.equal(symmetric.linkName, 'relates to');
+  assert.equal(symmetric.targetJiraKey, 'PRJ-3');
 });
