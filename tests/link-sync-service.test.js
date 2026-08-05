@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { syncIssueLinks } = require('../jira-migration/link-sync-service');
+const { syncIssueLinks, getIssueTree } = require('../jira-migration/link-sync-service');
 
 const mappingJson = JSON.stringify({
   'relates to': { jiraType: 'Relates', symmetric: true }
@@ -107,4 +107,14 @@ test('YOU-16 skips issues that are not eligible for link synchronization', () =>
 
   assert.equal(result.status, 'skipped');
   assert.match(result.reason, /Jira Sync/);
+});
+
+test('YOU-16 collects the current issue and its immediate children once', () => {
+  const childA = enabledIssue('PRJ-2');
+  const childB = enabledIssue('PRJ-3');
+  const issue = enabledIssue('PRJ-1', {}, {
+    'parent for': { forEach: visitor => [childA, childB, childA].forEach(visitor) }
+  });
+
+  assert.deepEqual(getIssueTree(issue), [issue, childA, childB]);
 });

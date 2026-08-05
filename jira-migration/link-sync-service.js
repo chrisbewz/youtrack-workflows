@@ -16,6 +16,24 @@ const parseSnapshot = raw => {
   }
 };
 
+const getIssueTree = issue => {
+  const issues = [issue];
+  const seen = new Set([issue.id || issue]);
+  const children = issue.links && issue.links['parent for'];
+
+  if (children && typeof children.forEach === 'function') {
+    children.forEach(child => {
+      const identity = child.id || child;
+      if (!seen.has(identity)) {
+        seen.add(identity);
+        issues.push(child);
+      }
+    });
+  }
+
+  return issues;
+};
+
 const eligibleTargets = targets => (targets || []).filter(target =>
   getFieldValueName(target.fields && target.fields['Jira ID']) &&
   getFieldValueName(target.fields && target.fields['Jira Sync']) === 'Enabled'
@@ -98,4 +116,4 @@ const syncIssueLinks = (issue, settings, dependencies) => {
   };
 };
 
-module.exports = { syncIssueLinks, parseSnapshot };
+module.exports = { getIssueTree, syncIssueLinks, parseSnapshot };
