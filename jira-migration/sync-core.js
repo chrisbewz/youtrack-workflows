@@ -15,6 +15,8 @@
 
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
+const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
+const { evaluateSyncDecision, getFieldValueName, getSubtasksToSync } = require('./sync-decisions');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -139,82 +141,6 @@ const buildTeamsMessage = (syncResult) => {
   return { themeColor, title, subtitle, text };
 };
 
-// --- MAPPING HELPERS ---
-
-const getJiraStatus = (issue, settings) => {
-  const stateName = issue.fields.State.name;
-
-  // Parse a comma-separated setting string into a trimmed array.
-  // Falls back to the provided defaults when the setting is absent or blank.
-  const parseStates = (raw, defaults) => {
-    const src = (raw && raw.trim()) ? raw : defaults;
-    return src.split(',').map(v => v.trim()).filter(Boolean);
-  };
-
-  const doneStates       = parseStates(settings.statusDoneStates,       "Fixed,Verified,Closed,Can't Reproduce,Duplicate,Won't fix,Incomplete");
-  const inProgressStates = parseStates(settings.statusInProgressStates, 'In Progress');
-
-  if (doneStates.indexOf(stateName)       !== -1) return 'Done';
-  if (inProgressStates.indexOf(stateName) !== -1) return 'In Progress';
-  return 'To Do';
-};
-
-const getJiraIssueType = (issue, settings) => {
-  const typeName = issue.fields.Type ? issue.fields.Type.name : '';
-
-  // Project-level type configuration takes priority.
-  // Each setting maps a YouTrack type name to one of the four standard Jira issue types.
-  // Empty/missing settings fall back to the hardcoded default names below.
-  if (typeName === (settings.epicItemType    || 'Epic'))    return 'Epic';
-  if (typeName === (settings.storyItemType   || 'Feature')) return 'Story';
-  if (typeName === (settings.taskItemType    || 'Task'))    return 'Task';
-  if (typeName === (settings.subTaskItemType || 'Subtask')) return 'Sub-task';
-
-  // Legacy mappings for types not covered by the four configurable slots above.
-  // These remain hardcoded for backward compatibility.
-  const legacyMapping = {
-    'Bug':         'Bug',
-    'Improvement': 'Story'
-  };
-  return legacyMapping[typeName] || 'Task';
-};
-
-const getJiraPriority = (issue, settings) => {
-  const priorityName = issue.fields.Priority.name;
-
-  // Each tier has two settings:
-  //   priorityXxxName      — the YouTrack field value to match (source)
-  //   priorityXxxNameJira  — the Jira priority name to send in the payload (target)
-  // Both fall back to sensible defaults when left blank.
-  const tiers = [
-    {
-      ytName:   settings.priorityHighestName     || 'Show-stopper',
-      jiraName: settings.priorityHighestNameJira || 'Highest'
-    },
-    {
-      ytName:   settings.priorityHighName     || 'Critical',
-      jiraName: settings.priorityHighNameJira || 'High'
-    },
-    {
-      ytName:   settings.priorityMediumName     || 'Normal',
-      jiraName: settings.priorityMediumNameJira || 'Medium'
-    },
-    {
-      ytName:   settings.priorityLowName     || 'Minor',
-      jiraName: settings.priorityLowNameJira || 'Low'
-    }
-  ];
-
-  const matched = tiers.find(t => t.ytName === priorityName);
-  if (matched) return matched.jiraName;
-
-  // Legacy fallback: 'Major' was historically mapped to Medium and is not
-  // configurable in this version (discussed and deferred in YOU-4).
-  if (priorityName === 'Major') return settings.priorityMediumNameJira || 'Medium';
-
-  return settings.priorityMediumNameJira || 'Medium';
-};
-
 const getJiraLabels = (issue) => {
   const jiraLabels = [];
   issue.tags.forEach(tag => {
@@ -308,7 +234,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const jiraApiToken = ctx.settings.jiraApiToken;
 
   const syncMode = ctx.settings.syncMode || 'Disabled';
-  const issueSyncMode = issue.fields["Jira Sync"].presentation || 'Disabled';
+  const issueSyncMode = getFieldValueName(issue.fields['Jira Sync']) || 'Enabled';
+  const syncDecision = evaluateSyncDecision(issue, ctx.settings);
 
   // Structured result object — populated throughout the sync pipeline and returned to the
   // caller so it can build a human-readable notification without parsing raw log lines.
@@ -321,7 +248,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     youtrackProjectName:      issue.project ? issue.project.name : (jiraProjectSlug || ''),
     youtrackProjectShortName: issue.project ? issue.project.shortName : '',
     youtrackBaseUrl:          ctx.settings.youtrackBaseUrl || '',
-    isDryRun:                 syncMode === 'Dry-Run',
+    isDryRun:                 syncDecision.isDryRun,
     issueIsDryRun:            issueSyncMode === 'Dry-Run',
     operation:                'skipped',
     changes:                  triggerReason ? triggerReason.split(' | ') : [],
@@ -329,15 +256,15 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     timestamp:                new Date()
   };
 
-  if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
-    log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
-    syncResult.errorMsg = 'configurações obrigatórias ausentes';
+  if (!syncDecision.shouldSync) {
+    log('[Jira Sync] ' + syncDecision.reason + '. Skipping issue: ' + issue.id);
+    syncResult.errorMsg = syncDecision.reason;
     return syncResult;
   }
 
-  if (syncMode === 'Disabled') {
-    log('[Jira Sync] Sync disabled for project. Skipping issue: ' + issue.id);
-    syncResult.errorMsg = 'sync desabilitado para o projeto';
+  if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
+    log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
+    syncResult.errorMsg = 'configurações obrigatórias ausentes';
     return syncResult;
   }
 
@@ -374,9 +301,8 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
     estimation: getJiraEstimation(issue)
   };
 
-  const isDryRun = syncMode === 'Dry-Run' | issueSyncMode === 'Dry-Run';
-  const isSyncDisabled = syncMode === 'Disabled' | issueSyncMode === 'Disabled';
-  const isSyncEnabled = !isDryRun && !isSyncDisabled;
+  const isDryRun = syncDecision.isDryRun;
+  const isSyncEnabled = !isDryRun;
 
   // --- JIRA CONTEXT ---
   const jiraDataKey = issue.fields['Jira ID'] || null;
@@ -575,7 +501,7 @@ const checkJiraStatus = (issue, ctx, collector) => {
   const jiraIssue       = JSON.parse(response.response);
   const statusCategory  = jiraIssue.fields.status.statusCategory.key; // 'new' | 'indeterminate' | 'done'
   const statusName      = jiraIssue.fields.status.name;
-  const isClosed        = statusCategory === 'done';
+  const isClosed        = isJiraStatusClosed(statusCategory);
 
   log('[Jira Check] ' + issue.id + ' → Jira ' + jiraKey + ' status: "' + statusName + '" (category: ' + statusCategory + ') → Jira Closed: ' + isClosed);
 
@@ -865,4 +791,4 @@ const applyJiraMentionMapping = (src, settings) => {
   return text;
 };
 
-module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage };
+module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };

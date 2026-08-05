@@ -12,6 +12,9 @@ const shouldEvalRule = (ctx) => {
 
   const issue = ctx.issue;
 
+  const jiraSync = issue.fields['Jira Sync'];
+  const syncSubtasks = issue.fields['Sync Subtasks'];
+
   return issue.becomesReported                  ||
     issue.oldValue('summary') !== null          ||
     issue.oldValue('description') !== null      ||
@@ -20,7 +23,9 @@ const shouldEvalRule = (ctx) => {
     issue.fields.Type.isChanged                 ||
     issue.fields.Estimation.isChanged           ||
     issue.fields.Subsystem.isChanged            ||
-    issue.tags.isChanged;
+    issue.tags.isChanged                        ||
+    !!(jiraSync && jiraSync.isChanged)           ||
+    !!(syncSubtasks && syncSubtasks.isChanged);
 };
 
 // Builds a human-readable list of what changed in this onChange cycle.
@@ -67,6 +72,16 @@ const buildChangeSummary = (issue) => {
     changes.push('Tags changed');
   }
 
+  const jiraSync = issue.fields['Jira Sync'];
+  if (jiraSync && jiraSync.isChanged) {
+    changes.push('Jira Sync → "' + (jiraSync.presentation || jiraSync.name || jiraSync) + '"');
+  }
+
+  const syncSubtasks = issue.fields['Sync Subtasks'];
+  if (syncSubtasks && syncSubtasks.isChanged) {
+    changes.push('Sync Subtasks → "' + (syncSubtasks.presentation || syncSubtasks.name || syncSubtasks) + '"');
+  }
+
   return changes;
 };
 
@@ -82,6 +97,13 @@ exports.rule = entities.Issue.onChange({
     const stateChanged = issue.becomesReported || issue.fields.State.isChanged;
 
     syncCore.performSync(issue, ctx, triggerReason, stateChanged);
+
+    const syncSubtasks = issue.fields['Sync Subtasks'];
+    if (syncSubtasks && syncSubtasks.isChanged) {
+      syncCore.getSubtasksToSync(issue).forEach(child => {
+        syncCore.performSync(child, ctx, 'Parent enabled subtask synchronization: ' + issue.id, true);
+      });
+    }
   },
   requirements: {
     'Jira ID': {
