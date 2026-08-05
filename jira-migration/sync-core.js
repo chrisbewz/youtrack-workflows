@@ -27,6 +27,12 @@ const {
   resolveDescriptionReferences,
   syncReferencedTargets
 } = require('./issue-reference-sync');
+const {
+  parseLinkTypeMapping,
+  collectUnresolvedYouTrackLinkTargets
+} = require('./link-normalization');
+const { syncIssueLinks } = require('./link-sync-service');
+const { createLinkDependencies } = require('./jira-link-runtime');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -309,10 +315,25 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
   // Resolve referenced YouTrack issues before building the current Jira payload.
   // Issue.findById accepts the visible issue ID:
   // https://www.jetbrains.com/help/youtrack/devportal/v1-Issue.html
+  let unresolvedLinkedTargets = [];
+  const issueLinkMode = getFieldValueName(issue.fields['Jira Link Sync']) ||
+    ctx.settings.linkSyncMode || 'Disabled';
+  if (issueLinkMode !== 'Disabled') {
+    try {
+      unresolvedLinkedTargets = collectUnresolvedYouTrackLinkTargets(
+        issue,
+        parseLinkTypeMapping(ctx.settings.linkTypeMappingJson)
+      );
+    } catch (error) {
+      log('[Jira Sync] Structured link preflight skipped: ' + error.message);
+    }
+  }
+
   const referenceResult = syncReferencedTargets(issue, {
     lookup: id => entities.Issue.findById(id),
     isDryRun: syncDecision.isDryRun,
     context: referenceContext || { visiting: {} },
+    additionalTargets: unresolvedLinkedTargets,
     syncTarget: (target, chain) => performSync(
       target,
       ctx,
@@ -450,6 +471,32 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
       syncResult.operation = 'updated';
       syncResult.jiraKey   = resolvedJiraKey;
       log('[Jira Sync][DRY-RUN] Would UPDATE Jira issue: ' + resolvedJiraKey);
+    }
+  }
+
+  // Reuse YOU-16 after referenced targets and the current issue have Jira IDs.
+  // Failures are isolated so an already-created Jira issue is never rolled back locally.
+  if (issueLinkMode !== 'Disabled' && (resolvedJiraKey || isDryRun)) {
+    const snapshotField = issue.project && issue.project.findFieldByName('Jira Link Snapshot');
+    if (!isDryRun && issueLinkMode !== 'Dry-Run' && !snapshotField) {
+      log('[Jira Sync] Structured link sync skipped: campo opcional Jira Link Snapshot ausente.');
+    } else {
+      try {
+        const linkResult = syncIssueLinks(
+          issue,
+          ctx.settings,
+          createLinkDependencies(ctx, issue.project)
+        );
+        if (linkResult.plan) {
+          log('[Jira Sync]' + (linkResult.status === 'dry-run' ? '[DRY-RUN]' : '') +
+            ' Structured links → Jira +' + linkResult.plan.jira.add.length +
+            '/-' + linkResult.plan.jira.remove.length +
+            ' | YouTrack +' + linkResult.plan.youtrack.add.length +
+            '/-' + linkResult.plan.youtrack.remove.length);
+        }
+      } catch (error) {
+        log('[Jira Sync] Structured link sync failed without reverting issue sync: ' + error.message);
+      }
     }
   }
 

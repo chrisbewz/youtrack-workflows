@@ -90,12 +90,16 @@ const syncReferencedTargets = (issue, options) => {
   const context = options.context || { visiting: {} };
   if (!context.visiting) context.visiting = {};
   const references = collectReferenceTargets(issue.description, issue.id, options.lookup);
-  const result = { planned: references.targets.map(target => target.id), cycles: [] };
+  const targets = references.targets.slice();
+  (options.additionalTargets || []).forEach(target => {
+    if (!targets.some(existing => existing.id === target.id)) targets.push(target);
+  });
+  const result = { planned: targets.map(target => target.id), cycles: [] };
   if (options.isDryRun) return result;
 
   context.visiting[issue.id] = true;
   try {
-    references.targets.forEach(target => {
+    targets.forEach(target => {
       if (context.visiting[target.id]) {
         result.cycles.push(target.id);
         return;
