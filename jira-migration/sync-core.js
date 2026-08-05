@@ -15,6 +15,7 @@
 
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
+const { getJiraStatus, getJiraIssueType, getJiraPriority } = require('./sync-mappings');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -137,82 +138,6 @@ const buildTeamsMessage = (syncResult) => {
   }
 
   return { themeColor, title, subtitle, text };
-};
-
-// --- MAPPING HELPERS ---
-
-const getJiraStatus = (issue, settings) => {
-  const stateName = issue.fields.State.name;
-
-  // Parse a comma-separated setting string into a trimmed array.
-  // Falls back to the provided defaults when the setting is absent or blank.
-  const parseStates = (raw, defaults) => {
-    const src = (raw && raw.trim()) ? raw : defaults;
-    return src.split(',').map(v => v.trim()).filter(Boolean);
-  };
-
-  const doneStates       = parseStates(settings.statusDoneStates,       "Fixed,Verified,Closed,Can't Reproduce,Duplicate,Won't fix,Incomplete");
-  const inProgressStates = parseStates(settings.statusInProgressStates, 'In Progress');
-
-  if (doneStates.indexOf(stateName)       !== -1) return 'Done';
-  if (inProgressStates.indexOf(stateName) !== -1) return 'In Progress';
-  return 'To Do';
-};
-
-const getJiraIssueType = (issue, settings) => {
-  const typeName = issue.fields.Type ? issue.fields.Type.name : '';
-
-  // Project-level type configuration takes priority.
-  // Each setting maps a YouTrack type name to one of the four standard Jira issue types.
-  // Empty/missing settings fall back to the hardcoded default names below.
-  if (typeName === (settings.epicItemType    || 'Epic'))    return 'Epic';
-  if (typeName === (settings.storyItemType   || 'Feature')) return 'Story';
-  if (typeName === (settings.taskItemType    || 'Task'))    return 'Task';
-  if (typeName === (settings.subTaskItemType || 'Subtask')) return 'Sub-task';
-
-  // Legacy mappings for types not covered by the four configurable slots above.
-  // These remain hardcoded for backward compatibility.
-  const legacyMapping = {
-    'Bug':         'Bug',
-    'Improvement': 'Story'
-  };
-  return legacyMapping[typeName] || 'Task';
-};
-
-const getJiraPriority = (issue, settings) => {
-  const priorityName = issue.fields.Priority.name;
-
-  // Each tier has two settings:
-  //   priorityXxxName      — the YouTrack field value to match (source)
-  //   priorityXxxNameJira  — the Jira priority name to send in the payload (target)
-  // Both fall back to sensible defaults when left blank.
-  const tiers = [
-    {
-      ytName:   settings.priorityHighestName     || 'Show-stopper',
-      jiraName: settings.priorityHighestNameJira || 'Highest'
-    },
-    {
-      ytName:   settings.priorityHighName     || 'Critical',
-      jiraName: settings.priorityHighNameJira || 'High'
-    },
-    {
-      ytName:   settings.priorityMediumName     || 'Normal',
-      jiraName: settings.priorityMediumNameJira || 'Medium'
-    },
-    {
-      ytName:   settings.priorityLowName     || 'Minor',
-      jiraName: settings.priorityLowNameJira || 'Low'
-    }
-  ];
-
-  const matched = tiers.find(t => t.ytName === priorityName);
-  if (matched) return matched.jiraName;
-
-  // Legacy fallback: 'Major' was historically mapped to Medium and is not
-  // configurable in this version (discussed and deferred in YOU-4).
-  if (priorityName === 'Major') return settings.priorityMediumNameJira || 'Medium';
-
-  return settings.priorityMediumNameJira || 'Medium';
 };
 
 const getJiraLabels = (issue) => {
