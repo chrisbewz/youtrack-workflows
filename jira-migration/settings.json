@@ -105,6 +105,21 @@
       "x-scope": "PROJECT",
       "default": "Subtask"
     },
+    "linkSyncMode": {
+      "title": "Jira Link Sync Mode",
+      "description": "Controls bidirectional issue-link synchronization. Disabled performs no work, Dry-Run reports the reconciliation plan, Additive only creates missing links, and Bidirectional reconciles additions, removals, and conflicts.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "enum": ["Disabled", "Dry-Run", "Additive", "Bidirectional"],
+      "default": "Disabled"
+    },
+    "linkTypeMappingJson": {
+      "title": "YouTrack to Jira Link Type Mapping",
+      "description": "JSON object keyed by the YouTrack link direction. Each value declares jiraType plus either symmetric=true or jiraSide=outward/inward.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "{}"
+    },
     "priorityHighestName": {
       "title": "YouTrack 'Highest' Priority Name",
       "description": "YouTrack Priority field value that maps to Highest in Jira. Leave blank to use the default ('Show-stopper').",
