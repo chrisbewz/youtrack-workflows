@@ -6,6 +6,7 @@
   "url": "https://github.com/chrisbewz/youtrack-workflows",
   "title" : "Jira Synchronization Manager",
   "version" : "0.0.1",
+  "minYouTrackVersion": "2024.3.0",
   "vendor" : {
     "name" : "Christian Celso Bewzenko",
     "email" : "crisbewz02@gmail.com"
