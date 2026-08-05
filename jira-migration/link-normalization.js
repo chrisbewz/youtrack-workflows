@@ -102,6 +102,25 @@ const normalizeYouTrackLinks = (issue, mapping) => {
   return { state, targets, skipped };
 };
 
+const collectUnresolvedYouTrackLinkTargets = (issue, mapping) => {
+  const targets = [];
+  const seen = {};
+  Object.keys(mapping).sort().forEach(linkName => {
+    const linkSet = issue.links && issue.links[linkName];
+    if (!linkSet || typeof linkSet.forEach !== 'function') return;
+    linkSet.forEach(target => {
+      const identity = target.id || target;
+      const sameProject = !issue.project || !target.project || issue.project.id === target.project.id;
+      if (seen[identity] || !sameProject ||
+        getFieldValueName(target.fields && target.fields['Jira Sync']) !== 'Enabled' ||
+        getFieldValueName(target.fields && target.fields['Jira ID'])) return;
+      seen[identity] = true;
+      targets.push(target);
+    });
+  });
+  return targets;
+};
+
 const resolveLinkOperation = (currentJiraKey, operation, mapping) => {
   const symmetric = operation.pair.indexOf('|') !== -1;
   const separator = symmetric ? '|' : '>';
@@ -136,5 +155,6 @@ module.exports = {
   parseLinkTypeMapping,
   normalizeJiraLinks,
   normalizeYouTrackLinks,
-  resolveLinkOperation
+  resolveLinkOperation,
+  collectUnresolvedYouTrackLinkTargets
 };

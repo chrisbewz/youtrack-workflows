@@ -71,6 +71,25 @@ test('YOU-16 dry-run returns the plan without writes or snapshot mutation', () =
   assert.deepEqual(dependencies.calls.snapshots, []);
 });
 
+test('YOU-21 global dry-run also prevents structured link writes', () => {
+  const target = enabledIssue('PRJ-2');
+  const dependencies = fakeDependencies();
+  const issue = enabledIssue('PRJ-1', {}, {
+    'relates to': { forEach: visitor => visitor(target) }
+  });
+
+  const result = syncIssueLinks(issue, {
+    syncMode: 'Dry-Run',
+    linkSyncMode: 'Bidirectional',
+    linkTypeMappingJson: mappingJson
+  }, dependencies);
+
+  assert.equal(result.status, 'dry-run');
+  assert.equal(result.plan.jira.add.length, 1);
+  assert.deepEqual(dependencies.calls.create, []);
+  assert.deepEqual(dependencies.calls.snapshots, []);
+});
+
 test('YOU-16 applies a Jira link to every eligible duplicate Jira ID in YouTrack', () => {
   const issue = enabledIssue('PRJ-1');
   const duplicateA = enabledIssue('PRJ-2');

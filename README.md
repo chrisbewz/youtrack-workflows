@@ -279,6 +279,12 @@ Attachment synchronization is opt-in per issue through `Jira Attachment Sync: En
 
 This first iteration does not delete Jira attachments when a YouTrack attachment is removed. Replacing a file is treated as a new upload, since attachments are immutable and Jira attachment deletion would require persistent ID mapping.
 
+### Issue references and dependencies
+
+Before synchronizing an issue, the workflow resolves YouTrack issue IDs found as plain text or Markdown links in its description. Eligible referenced issues (`Jira Sync: Enabled`) without a `Jira ID` are created first, then the source description is rendered with their Jira keys and browse links. Inline and fenced code, article IDs such as `YOU-A-12`, unresolved issues, and issues without explicit synchronization opt-in are preserved unchanged.
+
+Mapped structured links reuse the link synchronization from YOU-16. Eligible same-project targets are created before the source, and the configured Jira links are reconciled after both sides have Jira IDs. Circular references are guarded, and project or issue `Dry-Run` mode only reports the plan without writes.
+
 ---
 
 ## Local Debugging
@@ -333,6 +339,10 @@ Article IDs in the form `PROJECT-A-123` found in an issue description are resolv
 The app stores the YouTrack article version and returned Jira attachment ID in app-owned extension properties. This avoids mandatory custom fields and lets article changes replace the previous Jira attachment. Removing the reference removes the tracked Jira attachment. Upload always happens before replacement deletion, and `Disabled`/`Dry-Run` modes are respected.
 
 The current slice supports Markdown only. HTML and PDF rendering are intentionally separate follow-up items because YouTrack does not expose a documented workflow API for its UI PDF exporter.
+
+### Cross-project unresolved dependencies
+
+Automatic pre-creation of unresolved structured link targets is limited to the source YouTrack project because Jira synchronization settings are project-scoped. Cross-project links are still reconciled when the target already has a `Jira ID`; otherwise the original YouTrack reference remains unchanged until that target is synchronized by its own project workflow.
 
 ### Priority and type names are case-sensitive
 Jira rejects payloads with unknown priority or issue type names. Values must match exactly what is configured in the target Jira project. Use the `priorityXxxNameJira` settings to align names when they differ from the defaults.

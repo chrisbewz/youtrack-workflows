@@ -67,6 +67,9 @@ const syncIssueLinks = (issue, settings, dependencies) => {
   if (issueSyncMode !== 'Enabled') {
     return { status: 'skipped', reason: 'Jira Sync deve estar Enabled' };
   }
+  if (settings.syncMode === 'Disabled') {
+    return { status: 'skipped', reason: 'sync desabilitado para o projeto' };
+  }
   if (effectiveMode === 'Disabled') {
     return { status: 'skipped', reason: 'sincronização de links desabilitada' };
   }
@@ -76,7 +79,7 @@ const syncIssueLinks = (issue, settings, dependencies) => {
   const jiraNormalized = normalizeJiraLinks(jiraKey, jiraLinks, mapping);
   const youtrackNormalized = normalizeYouTrackLinks(issue, mapping);
   const snapshot = parseSnapshot(getFieldValueName(issue.fields['Jira Link Snapshot']));
-  const dryRun = effectiveMode === 'Dry-Run';
+  const dryRun = effectiveMode === 'Dry-Run' || settings.syncMode === 'Dry-Run';
   const plan = buildReconciliationPlan({
     snapshot,
     youtrack: youtrackNormalized.state,

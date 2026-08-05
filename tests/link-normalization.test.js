@@ -5,7 +5,8 @@ const {
   parseLinkTypeMapping,
   normalizeJiraLinks,
   normalizeYouTrackLinks,
-  resolveLinkOperation
+  resolveLinkOperation,
+  collectUnresolvedYouTrackLinkTargets
 } = require('../jira-migration/link-normalization');
 
 const mappingJson = JSON.stringify({
@@ -104,4 +105,25 @@ test('YOU-16 resolves canonical operations to Jira payload and YouTrack directio
   assert.equal(inward.targetJiraKey, 'PRJ-1');
   assert.equal(symmetric.linkName, 'relates to');
   assert.equal(symmetric.targetJiraKey, 'PRJ-3');
+});
+
+test('YOU-21 collects unique enabled linked targets that still need a Jira issue', () => {
+  const mapping = parseLinkTypeMapping(mappingJson);
+  const unresolved = { id: 'YOU-2', project: { id: 'P1' }, fields: {
+    'Jira Sync': { name: 'Enabled' }, 'Jira ID': null
+  } };
+  const resolved = { id: 'YOU-3', project: { id: 'P1' }, fields: {
+    'Jira Sync': { name: 'Enabled' }, 'Jira ID': 'APP-3'
+  } };
+  const otherProject = { id: 'OTHER-1', project: { id: 'P2' }, fields: {
+    'Jira Sync': { name: 'Enabled' }, 'Jira ID': null
+  } };
+  const source = {
+    project: { id: 'P1' },
+    links: {
+      'relates to': { forEach: visitor => [unresolved, resolved, unresolved, otherProject].forEach(visitor) }
+    }
+  };
+
+  assert.deepEqual(collectUnresolvedYouTrackLinkTargets(source, mapping), [unresolved]);
 });
