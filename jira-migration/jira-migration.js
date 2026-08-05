@@ -1,5 +1,6 @@
 const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const syncCore = require('./sync-core');
+const { hasVersionFieldChanged } = require('./version-mapping');
 
 /**
  * onChange rule — Syncs a YouTrack issue to Jira whenever a mapped field changes.
@@ -25,11 +26,12 @@ const shouldEvalRule = (ctx) => {
     issue.fields.Subsystem.isChanged            ||
     issue.tags.isChanged                        ||
     !!(jiraSync && jiraSync.isChanged)           ||
-    !!(syncSubtasks && syncSubtasks.isChanged);
+    !!(syncSubtasks && syncSubtasks.isChanged)   ||
+    hasVersionFieldChanged(issue, ctx.settings);
 };
 
 // Builds a human-readable list of what changed in this onChange cycle.
-const buildChangeSummary = (issue) => {
+const buildChangeSummary = (issue, settings) => {
   const changes = [];
 
   if (issue.becomesReported) {
@@ -82,6 +84,11 @@ const buildChangeSummary = (issue) => {
     changes.push('Sync Subtasks → "' + (syncSubtasks.presentation || syncSubtasks.name || syncSubtasks) + '"');
   }
 
+
+  if (hasVersionFieldChanged(issue, settings)) {
+    changes.push('Version field "' + settings.youtrackVersionFieldName + '" changed');
+  }
+
   return changes;
 };
 
@@ -90,7 +97,7 @@ exports.rule = entities.Issue.onChange({
   guard: (ctx) => shouldEvalRule(ctx),
   action: (ctx) => {
     const issue = ctx.issue;
-    const changes = buildChangeSummary(issue);
+    const changes = buildChangeSummary(issue, ctx.settings);
     const triggerReason = changes.length > 0 ? changes.join(' | ') : 'Field changes';
 
     // Transition should only be attempted when the state actually changed.

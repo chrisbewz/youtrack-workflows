@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 
 const {
   getYouTrackVersionNames,
-  buildVersionPlan
+  buildVersionPlan,
+  loadJiraVersionContext,
+  hasVersionFieldChanged
 } = require('../jira-migration/version-mapping');
 
 test('YOU-15 reads single and multi-value YouTrack version fields', () => {
@@ -12,6 +14,47 @@ test('YOU-15 reads single and multi-value YouTrack version fields', () => {
   const multi = { forEach: visitor => [{ name: '1.2.0' }, { name: '2.0.0' }].forEach(visitor) };
   assert.deepEqual(getYouTrackVersionNames({ fields: { Release: multi } }, 'Release'), ['1.2.0', '2.0.0']);
   assert.deepEqual(getYouTrackVersionNames({ fields: {} }, ''), []);
+});
+
+test('YOU-15 detects changes only in the configured optional version field', () => {
+  const issue = { fields: { Release: { isChanged: true }, Other: { isChanged: true } } };
+
+  assert.equal(hasVersionFieldChanged(issue, { youtrackVersionFieldName: 'Release' }), true);
+  assert.equal(hasVersionFieldChanged(issue, { youtrackVersionFieldName: 'Missing' }), false);
+  assert.equal(hasVersionFieldChanged(issue, {}), false);
+});
+
+test('YOU-15 loads versions and detects an editable target field for updates', () => {
+  const requests = [];
+  const connection = {
+    getSync: (path, query) => {
+      requests.push([path, query]);
+      if (path.includes('/versions')) return { code: 200, response: '[{"id":"10001","name":"1.2.0"}]' };
+      if (path.includes('/editmeta')) return { code: 200, response: '{"fields":{"fixVersions":{}}}' };
+      return { code: 200, response: '{"fields":{"labels":["backend","yt-version-old"]}}' };
+    }
+  };
+
+  const context = loadJiraVersionContext(connection, 'PRJ', 'PRJ-1', 'fixVersions', () => {});
+
+  assert.deepEqual(context.jiraVersions, [{ id: '10001', name: '1.2.0' }]);
+  assert.deepEqual(context.existingLabels, ['backend', 'yt-version-old']);
+  assert.equal(context.jiraFieldAvailable, true);
+  assert.deepEqual(requests.map(request => request[0]), [
+    '/project/PRJ/versions',
+    '/issue/PRJ-1',
+    '/issue/PRJ-1/editmeta'
+  ]);
+});
+
+test('YOU-15 safely falls back to labels when Jira metadata is unavailable', () => {
+  const connection = { getSync: () => ({ code: 403, response: 'Forbidden' }) };
+  const logs = [];
+
+  const context = loadJiraVersionContext(connection, 'PRJ', null, 'fixVersions', message => logs.push(message));
+
+  assert.deepEqual(context, { jiraVersions: [], existingLabels: [], jiraFieldAvailable: false });
+  assert.equal(logs.length, 1);
 });
 
 test('YOU-15 prefers an available Jira version field over managed labels', () => {

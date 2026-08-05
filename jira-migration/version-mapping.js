@@ -18,6 +18,12 @@ const getYouTrackVersionNames = (issue, fieldName) => {
   return names.filter((name, index) => name && names.indexOf(name) === index);
 };
 
+const hasVersionFieldChanged = (issue, settings) => {
+  const fieldName = settings && String(settings.youtrackVersionFieldName || '').trim();
+  const field = fieldName && issue && issue.fields && issue.fields[fieldName];
+  return !!(field && field.isChanged);
+};
+
 const versionLabel = (name, prefix) => {
   const slug = name.normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -61,4 +67,47 @@ const buildVersionPlan = options => {
   };
 };
 
-module.exports = { getYouTrackVersionNames, buildVersionPlan, versionLabel };
+const parseResponse = response => JSON.parse(response.response || 'null');
+
+// Jira Cloud REST API v2 project versions and edit metadata:
+// https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-project-versions/
+// https://developer.atlassian.com/cloud/jira/platform/rest/v2/api-group-issues/#api-rest-api-2-issue-issueidorkey-editmeta-get
+const loadJiraVersionContext = (connection, projectKey, jiraKey, jiraFieldId, log) => {
+  const context = { jiraVersions: [], existingLabels: [], jiraFieldAvailable: false };
+  const versionsResponse = connection.getSync('/project/' + encodeURIComponent(projectKey) + '/versions');
+  if (versionsResponse && versionsResponse.code === 200) {
+    context.jiraVersions = parseResponse(versionsResponse) || [];
+  } else {
+    log('[Jira Sync] Não foi possível listar versões do projeto; usando labels como fallback.');
+  }
+
+  if (!jiraKey) return context;
+
+  const issueResponse = connection.getSync(
+    '/issue/' + encodeURIComponent(jiraKey),
+    { fields: 'labels' }
+  );
+  if (issueResponse && issueResponse.code === 200) {
+    const jiraIssue = parseResponse(issueResponse) || {};
+    context.existingLabels = jiraIssue.fields && jiraIssue.fields.labels || [];
+  } else {
+    log('[Jira Sync] Não foi possível ler labels existentes para sincronização de versão.');
+  }
+
+  const metadataResponse = connection.getSync('/issue/' + encodeURIComponent(jiraKey) + '/editmeta');
+  if (metadataResponse && metadataResponse.code === 200) {
+    const metadata = parseResponse(metadataResponse) || {};
+    context.jiraFieldAvailable = !!(metadata.fields && metadata.fields[jiraFieldId]);
+  } else {
+    log('[Jira Sync] Não foi possível validar o campo de versão no Jira; usando labels como fallback.');
+  }
+  return context;
+};
+
+module.exports = {
+  getYouTrackVersionNames,
+  hasVersionFieldChanged,
+  buildVersionPlan,
+  loadJiraVersionContext,
+  versionLabel
+};

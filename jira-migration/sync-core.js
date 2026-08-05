@@ -17,6 +17,11 @@ const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
 const { evaluateSyncDecision, getFieldValueName, getSubtasksToSync } = require('./sync-decisions');
+const {
+  getYouTrackVersionNames,
+  buildVersionPlan,
+  loadJiraVersionContext
+} = require('./version-mapping');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -202,6 +207,10 @@ const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
     };
   }
 
+  Object.keys(mappings.versionFields || {}).forEach(fieldId => {
+    if (fieldId !== 'labels') payload.fields[fieldId] = mappings.versionFields[fieldId];
+  });
+
   return payload;
 };
 
@@ -319,6 +328,41 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   const connection = new http.Connection(JIRA_URL, null, 2000);
   connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
   connection.addHeader('Content-Type', 'application/json');
+
+  const youtrackVersionFieldName = (ctx.settings.youtrackVersionFieldName || '').trim();
+  if (youtrackVersionFieldName) {
+    const configuredFieldId = (ctx.settings.jiraVersionFieldId || 'fixVersions').trim();
+    const jiraVersionFieldId = /^(fixVersions|versions|customfield_\d+)$/.test(configuredFieldId)
+      ? configuredFieldId
+      : null;
+    if (!jiraVersionFieldId) {
+      log('[Jira Sync] Jira version field ID inválido: "' + configuredFieldId + '"; usando labels como fallback.');
+    }
+
+    const labelPrefix = (ctx.settings.versionLabelPrefix || 'yt-version-').trim() || 'yt-version-';
+    const versionNames = getYouTrackVersionNames(issue, youtrackVersionFieldName);
+    const versionContext = loadJiraVersionContext(
+      connection,
+      JIRA_PROJECT_KEY,
+      jiraDataKey,
+      jiraVersionFieldId,
+      log
+    );
+    const managedLabels = versionContext.existingLabels.filter(label => label.indexOf(labelPrefix) === 0);
+    const versionPlan = buildVersionPlan({
+      versionNames,
+      jiraVersions: versionContext.jiraVersions,
+      jiraFieldId: jiraVersionFieldId,
+      jiraFieldAvailable: !!jiraVersionFieldId && versionContext.jiraFieldAvailable,
+      existingLabels: mappings.labels.concat(managedLabels),
+      labelPrefix
+    });
+    mappings.labels = versionPlan.fields.labels;
+    mappings.versionFields = versionPlan.fields;
+    log('[Jira Sync] Version mapping → field: [' +
+      (versionPlan.versionNamesInField.join(', ') || 'none') + '] | labels: [' +
+      (versionPlan.versionNamesInLabels.join(', ') || 'none') + ']');
+  }
 
   const jiraComponents = isSyncEnabled
       ? getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log)
