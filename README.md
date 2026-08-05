@@ -79,6 +79,7 @@ The following custom fields must exist in every YouTrack project where the workf
 | `Jira ID` | String | Stores the Jira issue key after first sync (e.g. `PROJ-42`). Set automatically. |
 | `Jira State` | Enum | `Open`, `Closed`. Reflects the Jira-side status category. Set automatically. |
 | `Jira Sync` | Enum | `Enabled`, `Dry-Run`, `Disabled`. Per-issue override of the project sync mode. |
+| `Jira Attachment Sync` | Enum | Optional per-issue opt-in. Only `Enabled` uploads newly added attachments to Jira. |
 | `Jira Link Sync` | Enum | Optional per-issue link mode: `Disabled`, `Dry-Run`, `Additive`, `Bidirectional`. |
 | `Jira Link Snapshot` | String | Stores the last converged link state. Required for non-dry-run link sync. |
 | `State` | State | Standard YouTrack state field. |
@@ -167,6 +168,8 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 | `youtrackVersionFieldName` | Exact name of the optional YouTrack version/release field. Blank disables version synchronization. | ✗ |
 | `jiraVersionFieldId` | Jira version-picker field ID. Default: `fixVersions`; custom version fields use IDs such as `customfield_12345`. | ✗ |
 | `versionLabelPrefix` | Reserved prefix for fallback labels managed by the workflow. Default: `yt-version-`. | ✗ |
+| `attachmentMaxSizeKb` | Maximum size per attachment. Default: `5120` KB. | ✗ |
+| `attachmentAllowedMimeTypes` | Comma-separated MIME whitelist. Defaults to PNG, JPEG, PDF, and plain text. | ✗ |
 
 Example link mapping:
 
@@ -247,6 +250,7 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 | `jira-migration-check-action.js` | `action` | "Check Jira Status" button | Fetch Jira status and update `Jira State` |
 | `jira-link-sync-action.js` | `action` | "Sync Jira Links" button | Reconcile mapped links for the issue and immediate children |
 | `jira-label-sync-action.js` | `action` | "Sync Jira Labels" button | Add Jira labels as YouTrack tags, creating missing tags |
+| `jira-attachment-sync.js` | `onChange` | A new attachment is added to an opted-in issue | Upload accepted attachments to Jira via multipart |
 | `jira-migration-schedule.js` | `onSchedule` (×2) | Daily 03:00 / 03:30 | Bulk sync of unsynced issues; bulk status check of synced issues |
 
 **Tracked field changes** (onChange rule):
@@ -265,6 +269,12 @@ The workflow never creates Jira project versions. Creating versions requires add
 ### Manual label synchronization
 
 The `Sync Jira Labels` action is available only on reported issues with `Jira Sync: Enabled` and a `Jira ID`. It reads the Jira `labels` field and adds exact-name YouTrack tags. Missing tags are created through the YouTrack REST API using `youtrackApiToken`. The operation is additive: it never removes existing YouTrack tags.
+
+### Attachment synchronization
+
+Attachment synchronization is opt-in per issue through `Jira Attachment Sync: Enabled`. It only runs when the effective Jira sync mode is `Enabled` and the issue already has a `Jira ID`. Newly added files are uploaded directly from the YouTrack `InputStream` to Jira as multipart data after applying the configured size and MIME filters.
+
+This first iteration does not delete Jira attachments when a YouTrack attachment is removed. Replacing a file is treated as a new upload, since attachments are immutable and Jira attachment deletion would require persistent ID mapping.
 
 ---
 
