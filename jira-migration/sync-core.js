@@ -15,6 +15,7 @@
 
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
+const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
 const { evaluateSyncDecision, getFieldValueName, getSubtasksToSync } = require('./sync-decisions');
 const {
@@ -22,6 +23,10 @@ const {
   buildVersionPlan,
   loadJiraVersionContext
 } = require('./version-mapping');
+const {
+  resolveDescriptionReferences,
+  syncReferencedTargets
+} = require('./issue-reference-sync');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -228,8 +233,9 @@ const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
  *                                   surfacing via workflow.message() in user-triggered rules.
  *                                   When provided, all log lines are pushed here in addition
  *                                   to console.log, so the caller can display them in the UI.
+ * @param {Object}   [referenceContext] - Recursion guard shared while referenced issues are created.
  */
-const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
+const performSync = (issue, ctx, triggerReason, stateChanged, collector, referenceContext) => {
   // log() writes to console always, and also pushes to the collector when provided.
   // This allows the action rule to surface log output via workflow.message() in YouTrack Cloud,
   // where server-side console logs are not accessible to users.
@@ -299,6 +305,30 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector) => {
   // --- TRIGGER SUMMARY ---
   log('[Jira Sync] Triggered for issue: ' + issue.id + ' | Mode: ' + syncMode + ' | Issue Sync Mode: ' + issueSyncMode);
   log('[Jira Sync] Reason: ' + (triggerReason || 'unspecified'));
+
+  // Resolve referenced YouTrack issues before building the current Jira payload.
+  // Issue.findById accepts the visible issue ID:
+  // https://www.jetbrains.com/help/youtrack/devportal/v1-Issue.html
+  const referenceResult = syncReferencedTargets(issue, {
+    lookup: id => entities.Issue.findById(id),
+    isDryRun: syncDecision.isDryRun,
+    context: referenceContext || { visiting: {} },
+    syncTarget: (target, chain) => performSync(
+      target,
+      ctx,
+      'Referenced by ' + issue.id,
+      true,
+      collector,
+      chain
+    )
+  });
+  if (referenceResult.planned.length > 0) {
+    log('[Jira Sync]' + (syncDecision.isDryRun ? '[DRY-RUN]' : '') +
+      ' Referenced issues without Jira ID: ' + referenceResult.planned.join(', '));
+  }
+  if (referenceResult.cycles.length > 0) {
+    log('[Jira Sync] Circular references skipped: ' + referenceResult.cycles.join(', '));
+  }
 
   // --- EVALUATED MAPPINGS ---
   // Computed once and reused in both logging and payload building.
@@ -738,10 +768,17 @@ const notifyChannel = (settings, syncResult) => {
 const buildJiraDescription = (issue, ctx) => {
   const raw = issue.description || 'No description provided';
 
-  // 1) Markdown → Jira wiki
-  let text = markdownToJiraWiki(raw);
+  // 1) YouTrack issue references → resolved Jira references.
+  let text = resolveDescriptionReferences(
+    raw,
+    id => entities.Issue.findById(id),
+    ctx.settings.jiraEndpointUrl
+  );
 
-  // 2) Mentions → Jira mentions
+  // 2) Markdown → Jira wiki
+  text = markdownToJiraWiki(text);
+
+  // 3) Mentions → Jira mentions
   text = applyJiraMentionMapping(text, ctx.settings);
 
   return text;
