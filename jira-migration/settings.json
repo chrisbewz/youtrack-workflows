@@ -147,6 +147,21 @@
       "x-scope": "PROJECT",
       "default": "yt-version-"
     },
+    "attachmentMaxSizeKb": {
+      "title": "Attachment Sync Maximum Size (KB)",
+      "description": "Maximum size of each newly added attachment sent to Jira. Used only when the issue enables Jira Attachment Sync.",
+      "type": "integer",
+      "minimum": 1,
+      "x-scope": "PROJECT",
+      "default": 5120
+    },
+    "attachmentAllowedMimeTypes": {
+      "title": "Attachment Sync Allowed MIME Types",
+      "description": "Comma-separated MIME type whitelist for Jira attachment synchronization.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "image/png,image/jpeg,application/pdf,text/plain"
+    },
     "priorityHighestName": {
       "title": "YouTrack 'Highest' Priority Name",
       "description": "YouTrack Priority field value that maps to Highest in Jira. Leave blank to use the default ('Show-stopper').",

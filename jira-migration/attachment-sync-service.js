@@ -1,10 +1,18 @@
-const { getFieldValueName } = require('./sync-decisions');
+const { getFieldValueName, evaluateSyncDecision } = require('./sync-decisions');
 
 const DEFAULT_MAX_SIZE_KB = 5120;
 const DEFAULT_MIME_TYPES = 'image/png,image/jpeg,application/pdf,text/plain';
 
 const isAttachmentSyncEnabled = issue =>
   getFieldValueName(issue && issue.fields && issue.fields['Jira Attachment Sync']) === 'Enabled';
+
+const isAttachmentSyncEligible = (issue, settings) => {
+  const decision = evaluateSyncDecision(issue, settings);
+  return !!issue && issue.isReported === true &&
+    !!getFieldValueName(issue.fields && issue.fields['Jira ID']) &&
+    isAttachmentSyncEnabled(issue) &&
+    decision.shouldSync && !decision.isDryRun;
+};
 
 const parseAllowedMimeTypes = value => (value || DEFAULT_MIME_TYPES)
   .split(',')
@@ -35,8 +43,7 @@ const buildUploadPlan = (attachments, settings) => {
       name: 'file',
       size: attachment.size,
       fileName: attachment.name,
-      content: attachment.content,
-      contentType: attachment.mimeType
+      content: attachment.content
     });
   });
   return plan;
@@ -46,6 +53,7 @@ module.exports = {
   DEFAULT_MAX_SIZE_KB,
   DEFAULT_MIME_TYPES,
   isAttachmentSyncEnabled,
+  isAttachmentSyncEligible,
   evaluateAttachment,
   buildUploadPlan
 };
