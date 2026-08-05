@@ -79,6 +79,8 @@ The following custom fields must exist in every YouTrack project where the workf
 | `Jira ID` | String | Stores the Jira issue key after first sync (e.g. `PROJ-42`). Set automatically. |
 | `Jira State` | Enum | `Open`, `Closed`. Reflects the Jira-side status category. Set automatically. |
 | `Jira Sync` | Enum | `Enabled`, `Dry-Run`, `Disabled`. Per-issue override of the project sync mode. |
+| `Jira Link Sync` | Enum | Optional per-issue link mode: `Disabled`, `Dry-Run`, `Additive`, `Bidirectional`. |
+| `Jira Link Snapshot` | String | Stores the last converged link state. Required for non-dry-run link sync. |
 | `State` | State | Standard YouTrack state field. |
 | `Priority` | Enum | Standard YouTrack priority field. |
 | `Type` | Enum | Standard YouTrack type field. |
@@ -159,6 +161,20 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 | `jiraProjectSlug` | Key of the target Jira project (e.g. `PROJ`). | ✅ |
 | `syncMode` | `Enabled`, `Dry-Run`, or `Disabled`. Controls sync for all issues in the project. | ✅ |
 | `overrideCompleted` | When `true`, syncs issues even if `Jira State` is `Closed`. Default: `false`. | ✗ |
+| `linkSyncMode` | Link synchronization default: `Disabled`, `Dry-Run`, `Additive`, or `Bidirectional`. Default: `Disabled`. | ✗ |
+| `linkTypeMappingJson` | JSON mapping YouTrack link directions to Jira link types and sides. Default: `{}`. | ✗ |
+
+Example link mapping:
+
+```json
+{
+  "relates to": { "jiraType": "Relates", "symmetric": true },
+  "depends on": { "jiraType": "Blocks", "jiraSide": "inward" },
+  "is required for": { "jiraType": "Blocks", "jiraSide": "outward" }
+}
+```
+
+Only linked YouTrack issues with both a `Jira ID` and `Jira Sync: Enabled` participate. The manual action processes the selected issue and its immediate children. In `Bidirectional` mode, unilateral edits propagate from either system; simultaneous divergent edits are resolved in favor of Jira. `Additive` creates the union without deleting links, while `Dry-Run` only reports the plan.
 
 ### Priority Mapping
 
@@ -225,6 +241,7 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 | `jira-migration.js` | `onChange` | Any mapped field changes on a reported issue | Real-time sync to Jira |
 | `jira-migration-action.js` | `action` | "Sync to Jira" button | Manual or forced re-sync |
 | `jira-migration-check-action.js` | `action` | "Check Jira Status" button | Fetch Jira status and update `Jira State` |
+| `jira-link-sync-action.js` | `action` | "Sync Jira Links" button | Reconcile mapped links for the issue and immediate children |
 | `jira-migration-schedule.js` | `onSchedule` (×2) | Daily 03:00 / 03:30 | Bulk sync of unsynced issues; bulk status check of synced issues |
 
 **Tracked field changes** (onChange rule):
@@ -265,8 +282,8 @@ issue.fields['Jira ID'] = 'PROJ-123';
 
 ## Known Limitations
 
-### No bi-directional sync
-Changes made directly in Jira are not reflected back in YouTrack. The `Jira State` field is the only piece of Jira-side state that is pulled back, and only via the scheduled status check or the "Check Jira Status" action.
+### Bi-directional sync is limited to links
+Mapped issue links can be reconciled manually in both directions. Other fields changed directly in Jira are not reflected back in YouTrack. The `Jira State` field is the only other Jira-side state pulled back, and only via the scheduled status check or the "Check Jira Status" action.
 
 ### REST API v2 — plain text descriptions
 The sync pipeline targets Jira REST API **v2**, which accepts `description` and comment `body` as plain strings only. Atlassian Document Format (ADF/rich text) is supported by API v3 only and is not used here. Formatting in YouTrack descriptions is lost on sync.
