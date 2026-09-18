@@ -2,7 +2,7 @@ name: jira-migration-integration
 
 services:
   youtrack:
-    image: "jetbrains/youtrack:${YOUTRACK_IMAGE_TAG:?Set YOUTRACK_IMAGE_TAG to a full Docker Hub build tag.}"
+    image: "${YOUTRACK_IMAGE_REPOSITORY:-jetbrains/youtrack}:${YOUTRACK_IMAGE_TAG:?Set YOUTRACK_IMAGE_TAG to a full Docker Hub build tag.}"
     ports:
       - "${YOUTRACK_HOST_PORT:-8089}:8080"
     volumes:
@@ -16,6 +16,8 @@ services:
     build:
       context: ../../..
       dockerfile: tests/integration/runner/Dockerfile
+      args:
+        NODE_IMAGE: "${RUNNER_NODE_IMAGE:-node:22-alpine}"
     depends_on:
       - youtrack
     environment:

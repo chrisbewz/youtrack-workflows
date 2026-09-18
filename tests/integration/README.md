@@ -15,6 +15,34 @@ never use repository `.npmrc` values and never send a package to production.
 Select a full, pinned YouTrack image build tag from Docker Hub. Do not use
 `latest`; a pinned tag makes a failed integration run reproducible.
 
+## Corporate proxies and registries
+
+The environment works both with public images and with an internal registry
+mirror. Image locations are intentionally local configuration, so a developer
+can switch networks without changing a tracked Compose file:
+
+```dotenv
+# Public internet defaults
+YOUTRACK_IMAGE_REPOSITORY=jetbrains/youtrack
+RUNNER_NODE_IMAGE=node:22-alpine
+
+# Example internal mirror. Use the exact paths defined by your registry team.
+YOUTRACK_IMAGE_REPOSITORY=registry.corp.example/third-party/jetbrains/youtrack
+RUNNER_NODE_IMAGE=registry.corp.example/library/node:22-alpine
+```
+
+Keep the same pinned `YOUTRACK_IMAGE_TAG` in either case. Authenticate the
+Docker client with `docker login registry.corp.example`; never put registry
+credentials in `.env.local`, `mise.toml`, or a Compose file.
+
+Configure the proxy at the Docker layer, not in this repository. In Docker
+Desktop, configure **Settings > Resources > Proxies** for image pulls and
+container egress. In Docker Engine, configure the daemon proxy. Add
+`localhost`, `127.0.0.1`, and `youtrack` to the proxy bypass list so the runner
+can reach the local YouTrack service directly. The runner also needs permitted
+egress to the npm registry during image build and, for Jira Migration, to the
+Jira Cloud sandbox.
+
 The YouTrack image stores data, configuration, logs, and backups in named
 volumes. This follows the server installation model and preserves the initial
 wizard configuration across normal Compose restarts.
