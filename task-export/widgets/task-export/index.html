@@ -291,11 +291,11 @@
       const taskDetails = exportDocument => {
         const task = exportDocument.task || {};
         const heading = String(exportDocument.markdown || '').match(/^#\s+(.+)$/m);
-        const fileId = String(exportDocument.fileName || '').match(/^([A-Za-z]+-\d+)-/);
+        const fileId = String(exportDocument.fileName || '').match(/[A-Za-z][A-Za-z0-9]*-\d+/);
         const headingText = heading ? heading[1].replace(/\\(.)/g, '$1') : exportDocument.fileName;
         const summary = task.summary || headingText.replace(/^.*\.md\s+—\s+/, '');
         return {
-          idReadable: exportDocument.idReadable || task.idReadable || (fileId ? fileId[1] : exportDocument.fileName),
+          idReadable: exportDocument.idReadable || task.idReadable || (fileId ? fileId[0] : ''),
           summary,
           title: typeof exportDocument.originalTitle === 'string'
             ? exportDocument.originalTitle

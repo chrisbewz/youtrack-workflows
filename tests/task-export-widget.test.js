@@ -36,6 +36,8 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /replace\(\/\^\.\*\\\.md\\s\+—\\s\+\//);
   assert.match(widget, /typeof exportDocument\.originalTitle === 'string'/);
   assert.match(widget, /exportDocument\.idReadable \|\| task\.idReadable/);
+  assert.match(widget, /match\(\/\[A-Za-z\]\[A-Za-z0-9\]\*-\\d\+\//);
+  assert.match(widget, /fileId \? fileId\[0\] : ''/);
   assert.match(widget, /: leftTask\.title/);
   assert.match(widget, /const orderedMarkdown/);
   assert.match(widget, /createZipBytes\(orderedDocuments\)/);
