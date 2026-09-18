@@ -169,12 +169,12 @@
         status.classList.add('warning');
         status.textContent += text.duplicateWarning;
       }
-      payload.documents.forEach(document => {
-        const task = document.task || {};
+      payload.documents.forEach(exportDocument => {
+        const task = exportDocument.task || {};
         const item = document.createElement('li');
         item.textContent = task.idReadable && task.summary
           ? task.idReadable + ' — ' + task.summary
-          : document.fileName;
+          : exportDocument.fileName;
         taskList.append(item);
       });
       taskPreview.hidden = false;

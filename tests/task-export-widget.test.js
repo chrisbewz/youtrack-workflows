@@ -19,8 +19,10 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /id="export-menu"/);
   assert.match(widget, /Copy Markdown/);
   assert.match(widget, /navigator\.clipboard\.writeText/);
-  assert.match(widget, /const task = document\.task \|\| \{\}/);
-  assert.match(widget, /: document\.fileName/);
+  assert.match(widget, /const task = exportDocument\.task \|\| \{\}/);
+  assert.match(widget, /: exportDocument\.fileName/);
+  assert.match(widget, /payload\.documents\.forEach\(exportDocument =>/);
+  assert.doesNotMatch(widget, /payload\.documents\.forEach\(document =>/);
 });
 
 test('widget uses a neutral label and an export icon in the issue menu', () => {
