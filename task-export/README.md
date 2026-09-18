@@ -16,12 +16,15 @@ The endpoint requires READ_ISSUE permission and returns:
 
 - Content-Type: text/markdown; charset=utf-8
 - Content-Disposition: attachment
-- Markdown with each issue title as H1 and its description under ## Descrição
+- Markdown with each issue title as H1 and its description under `## Descrição`
 
 The project setting Include subtasks is disabled by default. When enabled,
 issues are emitted in pre-order: root, first subtask tree, next subtask tree.
 Repeated issue references are emitted once and reported in the
 X-Task-Export-Warnings response header.
+
+The optional project settings Include fields, Include tags and Include task
+relation diagram add the corresponding sections to the Markdown output.
 
 The endpoint does not modify the issue or create an attachment.
 
@@ -31,5 +34,4 @@ The endpoint does not modify the issue or create an attachment.
 npm run upload-task-export:test --host_test=... --token_test=...
 ~~~
 
-The PDF, subtasks, fields, tags, relation diagram, ZIP packaging and UI action
-are planned for subsequent increments.
+PDF, ZIP packaging and a UI action remain planned for subsequent increments.
