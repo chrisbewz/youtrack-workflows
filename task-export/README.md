@@ -1,7 +1,8 @@
 # Task Export
 
-The first increment exposes an issue-scoped HTTP handler that returns the
-selected YouTrack issue as a UTF-8 Markdown download.
+The current increment exposes an issue-scoped HTTP handler that returns the
+selected YouTrack issue, optionally including recursive subtasks, as a UTF-8
+Markdown download.
 
 ## Endpoint
 
@@ -15,7 +16,12 @@ The endpoint requires READ_ISSUE permission and returns:
 
 - Content-Type: text/markdown; charset=utf-8
 - Content-Disposition: attachment
-- Markdown with the issue title as H1 and the description under ## Descrição
+- Markdown with each issue title as H1 and its description under ## Descrição
+
+The project setting Include subtasks is disabled by default. When enabled,
+issues are emitted in pre-order: root, first subtask tree, next subtask tree.
+Repeated issue references are emitted once and reported in the
+X-Task-Export-Warnings response header.
 
 The endpoint does not modify the issue or create an attachment.
 

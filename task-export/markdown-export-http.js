@@ -1,5 +1,7 @@
 const { renderTaskMarkdown } = require('./markdown-renderer');
 const { buildMarkdownDownloadHeaders } = require('./export-artifact');
+const { collectIssues } = require('./issue-export-collector');
+const { composeMarkdownDocuments } = require('./markdown-composer');
 
 exports.httpHandler = {
   endpoints: [
@@ -9,10 +11,15 @@ exports.httpHandler = {
       path: 'markdown',
       permissions: ['READ_ISSUE'],
       handle: ctx => {
-        const markdown = renderTaskMarkdown({
-          summary: ctx.issue.summary,
-          description: ctx.issue.description
+        const collection = collectIssues(ctx.issue, {
+          includeSubtasks: ctx.settings.includeSubtasks
         });
+        const markdown = composeMarkdownDocuments(collection.issues.map(issue =>
+          renderTaskMarkdown({
+            summary: issue.summary,
+            description: issue.description
+          })
+        ));
 
         const headers = buildMarkdownDownloadHeaders({
           idReadable: ctx.issue.idReadable,
@@ -23,6 +30,12 @@ exports.httpHandler = {
         Object.entries(headers).forEach(([name, value]) => {
           ctx.response.addHeader(name, value);
         });
+        if (collection.warnings.length > 0) {
+          ctx.response.addHeader(
+            'X-Task-Export-Warnings',
+            String(collection.warnings.length)
+          );
+        }
         ctx.response.text(markdown);
       }
     }

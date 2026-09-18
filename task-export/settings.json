@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "includeSubtasks": {
+      "title": "Include subtasks",
+      "description": "Recursively includes subtasks in deterministic pre-order.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeTaskRelationDiagram": {
+      "title": "Include task relation diagram",
+      "description": "Reserved for the Mermaid relation diagram increment.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeFields": {
+      "title": "Include fields",
+      "description": "Reserved for the issue fields increment.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeTags": {
+      "title": "Include tags",
+      "description": "Reserved for the issue tags increment.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "separateFilesForMultipleTasks": {
+      "title": "Separate files for multiple tasks",
+      "description": "Reserved for the ZIP packaging increment.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    }
+  }
+}
