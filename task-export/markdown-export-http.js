@@ -2,6 +2,7 @@ const { renderTaskMarkdown } = require('./markdown-renderer');
 const { buildMarkdownDownloadHeaders } = require('./export-artifact');
 const { collectIssues } = require('./issue-export-collector');
 const { composeMarkdownDocuments } = require('./markdown-composer');
+const { renderRelationDiagram } = require('./relation-diagram');
 
 exports.httpHandler = {
   endpoints: [
@@ -14,7 +15,7 @@ exports.httpHandler = {
         const collection = collectIssues(ctx.issue, {
           includeSubtasks: ctx.settings.includeSubtasks
         });
-        const markdown = composeMarkdownDocuments(collection.issues.map(issue =>
+        let markdown = composeMarkdownDocuments(collection.issues.map(issue =>
           renderTaskMarkdown({
             summary: issue.summary,
             description: issue.description,
@@ -25,6 +26,11 @@ exports.httpHandler = {
             includeTags: ctx.settings.includeTags
           })
         ));
+        if (ctx.settings.includeTaskRelationDiagram === true ||
+            ctx.settings.includeTaskRelationDiagram === 'true') {
+          const diagram = renderRelationDiagram(collection.issues);
+          if (diagram) markdown += '\n' + diagram;
+        }
 
         const headers = buildMarkdownDownloadHeaders({
           idReadable: ctx.issue.idReadable,
