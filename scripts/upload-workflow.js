@@ -38,8 +38,8 @@ const copyWorkflowPackage = (source, destination) => {
   return listFiles(destination);
 };
 
-const requireEnvironmentValue = name => {
-  const value = process.env[name];
+const requireEnvironmentValue = (name, aliases = []) => {
+  const value = [name, ...aliases].map(key => process.env[key]).find(Boolean);
   if (!value) throw new Error('Variável obrigatória ausente: ' + name);
   return value;
 };
@@ -55,7 +55,9 @@ const uploadWorkflow = (workflowName, environmentName) => {
   }
 
   const host = requireEnvironmentValue('npm_config_host_' + environmentName);
-  const token = requireEnvironmentValue('npm_config_token_' + environmentName);
+  const token = requireEnvironmentValue('npm_config_token_' + environmentName, [
+    environmentName === 'test' ? 'GH_YOUTRACK_WORKFLOWS_ACCESS_TOKEN' : ''
+  ].filter(Boolean));
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'youtrack-workflow-upload-'));
   const stagedWorkflow = path.join(tempRoot, workflowName);
 
@@ -80,6 +82,7 @@ const uploadWorkflow = (workflowName, environmentName) => {
       '--token=' + token
     ], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }
     });
     if (result.error) throw result.error;
