@@ -5,7 +5,7 @@ const {
   createPdfBytes,
   createZipBytes,
   createDownload
-} = require('../task-export/client-export');
+} = require('../task-export/widgets/task-export/client-export');
 
 test('creates a PDF document with a valid header and trailer', () => {
   const bytes = createPdfBytes('# Título\n\nDescrição com ação');

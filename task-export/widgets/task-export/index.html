@@ -52,7 +52,7 @@
     <button id="pdf">Download PDF</button>
     <button id="zip" hidden>Download ZIP</button>
   </div>
-  <script src="../../client-export.js"></script>
+  <script src="client-export.js"></script>
   <script type="module">
     const status = document.getElementById('status');
     const actions = document.getElementById('task-export-actions');
@@ -65,7 +65,8 @@
         zip: 'Download ZIP',
         ready: count => count === 1 ? '1 task ready to export.' : count + ' tasks ready to export.',
         duplicateWarning: ' Duplicate references were skipped.',
-        error: 'Unable to prepare the export. Try again or contact an administrator.'
+        error: 'Unable to prepare the export. Try again or contact an administrator.',
+        downloadError: 'Download failed. Please try again.'
       },
       pt: {
         loading: 'Preparando exportação…',
@@ -74,7 +75,8 @@
         zip: 'Baixar ZIP',
         ready: count => count === 1 ? '1 tarefa pronta para exportação.' : count + ' tarefas prontas para exportação.',
         duplicateWarning: ' Referências duplicadas foram ignoradas.',
-        error: 'Não foi possível preparar a exportação. Tente novamente ou contate um administrador.'
+        error: 'Não foi possível preparar a exportação. Tente novamente ou contate um administrador.',
+        downloadError: 'O download falhou. Tente novamente.'
       }
     };
     let text = messages.en;
@@ -86,13 +88,26 @@
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = fileName;
+      anchor.hidden = true;
+      document.body.append(anchor);
       anchor.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      setTimeout(() => {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }, 0);
     };
 
     const withBusyButton = (button, action) => {
       button.disabled = true;
-      try { action(); } finally { button.disabled = false; }
+      try {
+        action();
+      } catch (error) {
+        status.classList.add('warning');
+        status.textContent = text.downloadError;
+        console.error('Task Export: download failed.', error);
+      } finally {
+        button.disabled = false;
+      }
     };
 
     const initialize = async () => {

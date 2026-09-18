@@ -13,6 +13,8 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /Não foi possível preparar a exportação/);
   assert.match(widget, /@media \(prefers-color-scheme: dark\)/);
   assert.match(widget, /const locale = String\(host\.locale \|\| 'en'\)/);
+  assert.match(widget, /<script src="client-export\.js"><\/script>/);
+  assert.match(widget, /Download failed\. Please try again\./);
 });
 
 test('widget uses a neutral label and an export icon in the issue menu', () => {
@@ -20,5 +22,5 @@ test('widget uses a neutral label and an export icon in the issue menu', () => {
   const widget = manifest.widgets.find(item => item.key === 'task-export-menu');
 
   assert.equal(widget.name, 'Export task');
-  assert.equal(widget.iconPath, 'icons/export.svg');
+  assert.equal(widget.iconPath, 'widgets/task-export/icons/export.svg');
 });
