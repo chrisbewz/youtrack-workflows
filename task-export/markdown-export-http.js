@@ -11,6 +11,10 @@ const buildExportPayload = ctx => {
     includeSubtasks: isEnabled(ctx.settings.includeSubtasks)
   });
   const documents = collection.issues.map(issue => ({
+    task: {
+      idReadable: issue.idReadable,
+      summary: issue.summary
+    },
     fileName: buildMarkdownFilename(issue),
     markdown: renderTaskMarkdown({
       summary: issue.summary,

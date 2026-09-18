@@ -23,6 +23,33 @@ test('keeps long Markdown content across multiple PDF pages', () => {
   assert.ok((text.match(/\/Type \/Page /g) || []).length >= 2);
 });
 
+test('preserves Markdown hierarchy when generating a PDF', () => {
+  const markdown = [
+    '# E3-374 Root task',
+    '',
+    '## Description',
+    '',
+    '**Proposal:** Fix the import.',
+    '',
+    '- First step',
+    '- Second step',
+    '',
+    '---',
+    '',
+    '```text',
+    'const answer = 42;',
+    '```'
+  ].join('\n');
+  const text = Buffer.from(createPdfBytes(markdown)).toString('latin1');
+
+  assert.match(text, /\/F2 18 Tf/);
+  assert.match(text, /\/F2 15 Tf/);
+  assert.match(text, /\/F3 10 Tf/);
+  assert.match(text, /First step/);
+  assert.match(text, /const answer = 42;/);
+  assert.doesNotMatch(text, /\# E3-374 Root task/);
+});
+
 test('creates a ZIP archive containing the requested Markdown files', () => {
   const bytes = createZipBytes([
     { fileName: 'E3-374.md', content: '# Root\n' },

@@ -40,27 +40,23 @@ const escapePdfString = bytes => {
   return Uint8Array.from(result);
 };
 
-const markdownLines = markdown => String(markdown || '')
-  .replace(/```[^\n]*\n?/g, '')
+const stripMarkdown = value => String(value)
   .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
   .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-  .split(/\r?\n/)
-  .map(line => line
-    .replace(/^#{1,6}\s+/, '')
-    .replace(/^\s*[-*+]\s+/, '• ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .trim())
-  .filter(line => line.length > 0);
+  .replace(/`([^`]+)`/g, '$1')
+  .replace(/\*\*([^*]+)\*\*/g, '$1')
+  .replace(/__([^_]+)__/g, '$1')
+  .replace(/\*([^*]+)\*/g, '$1')
+  .replace(/_([^_]+)_/g, '$1')
+  .replace(/\\([\\`*_{}\[\]()#+.!\-])/g, '$1');
 
-const wrapLine = line => {
+const wrapLine = (line, maximumLength) => {
   const words = line.split(/\s+/);
   const lines = [];
   let current = '';
   words.forEach(word => {
     if (!current) current = word;
-    else if ((current + ' ' + word).length <= 92) current += ' ' + word;
+    else if ((current + ' ' + word).length <= maximumLength) current += ' ' + word;
     else {
       lines.push(current);
       current = word;
@@ -70,6 +66,77 @@ const wrapLine = line => {
   return lines;
 };
 
+const markdownBlocks = markdown => {
+  const blocks = [];
+  const source = String(markdown || '').split(/\r?\n/);
+  let inCodeBlock = false;
+
+  source.forEach((rawLine, index) => {
+    if (/^```/.test(rawLine.trim())) {
+      inCodeBlock = !inCodeBlock;
+      return;
+    }
+    if (inCodeBlock) {
+      wrapLine(rawLine || ' ', 80).forEach(text => blocks.push({ text, font: 'F3', size: 10, leading: 13, indent: 12 }));
+      return;
+    }
+
+    if (rawLine.trim() === '') {
+      blocks.push({ spacer: true, leading: 7 });
+      return;
+    }
+    if (/^\s{0,3}(-{3,}|\*{3,}|_{3,})\s*$/.test(rawLine)) {
+      blocks.push({ divider: true, leading: 16 });
+      return;
+    }
+
+    const heading = rawLine.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const style = level === 1
+        ? { font: 'F2', size: 18, leading: 26, maximumLength: 56 }
+        : level === 2
+          ? { font: 'F2', size: 15, leading: 22, maximumLength: 68 }
+          : { font: 'F2', size: 12, leading: 18, maximumLength: 82 };
+      wrapLine(stripMarkdown(heading[2]), style.maximumLength).forEach(text => blocks.push({ ...style, text }));
+      return;
+    }
+
+    const list = rawLine.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/);
+    if (list) {
+      const marker = /^\d/.test(list[2]) ? list[2] : '•';
+      const indent = Math.min(36, Math.floor(list[1].length / 2) * 12);
+      const wrapped = wrapLine(stripMarkdown(marker + ' ' + list[3]), 88 - Math.floor(indent / 6));
+      wrapped.forEach((text, lineIndex) => blocks.push({
+        text: lineIndex === 0 ? text : '  ' + text,
+        font: 'F1', size: 11, leading: 15, indent
+      }));
+      return;
+    }
+
+    if (/^\|/.test(rawLine) && /\|\s*[-:]+\s*/.test(rawLine)) return;
+    if (/^\|/.test(rawLine)) {
+      const cells = rawLine.split('|').slice(1, -1).map(cell => stripMarkdown(cell.trim()));
+      const nextLine = source[index + 1] || '';
+      const header = /^\|/.test(nextLine) && /\|\s*[-:]+\s*/.test(nextLine);
+      blocks.push({ text: cells.join('  |  '), font: header ? 'F2' : 'F1', size: 10, leading: 14, indent: 0 });
+      return;
+    }
+
+    const quote = rawLine.match(/^>\s?(.+)$/);
+    const text = stripMarkdown(quote ? quote[1] : rawLine);
+    wrapLine(text, quote ? 82 : 92).forEach(line => blocks.push({
+      text: line,
+      font: 'F1',
+      size: 11,
+      leading: 15,
+      indent: quote ? 12 : 0
+    }));
+  });
+
+  return blocks;
+};
+
 const pdfObject = (number, body) => concatBytes([
   ascii(number + ' 0 obj\n'),
   body,
@@ -77,27 +144,42 @@ const pdfObject = (number, body) => concatBytes([
 ]);
 
 const createPdfBytes = markdown => {
-  const lines = markdownLines(markdown).flatMap(wrapLine);
-  const pages = [];
-  for (let index = 0; index < Math.max(1, lines.length); index += 52) pages.push(lines.slice(index, index + 52));
-  const fontObjectNumber = 3 + pages.length * 2;
+  const blocks = markdownBlocks(markdown);
+  const pages = [[]];
+  let remainingHeight = 740;
+  blocks.forEach(block => {
+    if (block.leading > remainingHeight && pages[pages.length - 1].length > 0) {
+      pages.push([]);
+      remainingHeight = 740;
+    }
+    pages[pages.length - 1].push(block);
+    remainingHeight -= block.leading;
+  });
+  const regularFontObjectNumber = 3 + pages.length * 2;
+  const boldFontObjectNumber = regularFontObjectNumber + 1;
+  const codeFontObjectNumber = regularFontObjectNumber + 2;
   const pageObjects = [];
   const contentObjects = [];
-  pages.forEach((pageLines, pageIndex) => {
+  pages.forEach((pageBlocks, pageIndex) => {
     const contentParts = [];
-    pageLines.forEach((line, index) => {
-      const command = index === 0 ? 'BT /F1 11 Tf 50 790 Td ' : '0 -14 Td ';
-      contentParts.push(command + '(');
-      contentParts.push(escapePdfString(toWinAnsi(line)));
-      contentParts.push(') Tj\n');
+    let y = 790;
+    pageBlocks.forEach(block => {
+      if (block.divider) {
+        contentParts.push('0.75 w 50 ' + y + ' m 545 ' + y + ' l S\n');
+      } else if (!block.spacer) {
+        contentParts.push('BT /' + block.font + ' ' + block.size + ' Tf ' + (50 + block.indent) + ' ' + y + ' Td (');
+        contentParts.push(escapePdfString(toWinAnsi(block.text)));
+        contentParts.push(') Tj ET\n');
+      }
+      y -= block.leading;
     });
-    contentParts.push('ET\n');
     const content = concatBytes(contentParts.map(part => typeof part === 'string' ? ascii(part) : part));
     const pageObjectNumber = 3 + pageIndex * 2;
     const contentObjectNumber = pageObjectNumber + 1;
     pageObjects.push(pdfObject(pageObjectNumber, ascii(
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ' +
-      fontObjectNumber + ' 0 R >> >> /Contents ' + contentObjectNumber + ' 0 R >>'
+      regularFontObjectNumber + ' 0 R /F2 ' + boldFontObjectNumber + ' 0 R /F3 ' + codeFontObjectNumber +
+      ' 0 R >> >> /Contents ' + contentObjectNumber + ' 0 R >>'
     )));
     contentObjects.push(pdfObject(contentObjectNumber, concatBytes([
       ascii('<< /Length ' + content.length + ' >>\nstream\n'), content, ascii('endstream')
@@ -108,7 +190,9 @@ const createPdfBytes = markdown => {
     pdfObject(1, ascii('<< /Type /Catalog /Pages 2 0 R >>')),
     pdfObject(2, ascii('<< /Type /Pages /Kids [' + pageReferences + '] /Count ' + pages.length + ' >>')),
     ...pageObjects.flatMap((page, index) => [page, contentObjects[index]]),
-    pdfObject(fontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'))
+    pdfObject(regularFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>')),
+    pdfObject(boldFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>')),
+    pdfObject(codeFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>'))
   ];
   const header = ascii('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
   const offsets = [0];

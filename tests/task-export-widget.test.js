@@ -15,6 +15,12 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /const locale = String\(host\.locale \|\| 'en'\)/);
   assert.match(widget, /<script src="client-export\.js"><\/script>/);
   assert.match(widget, /Download failed\. Please try again\./);
+  assert.match(widget, /id="task-list"/);
+  assert.match(widget, /id="export-menu"/);
+  assert.match(widget, /Copy Markdown/);
+  assert.match(widget, /navigator\.clipboard\.writeText/);
+  assert.match(widget, /const task = document\.task \|\| \{\}/);
+  assert.match(widget, /: document\.fileName/);
 });
 
 test('widget uses a neutral label and an export icon in the issue menu', () => {

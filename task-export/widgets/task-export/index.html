@@ -14,7 +14,12 @@
       color: #1f2328;
       font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    #task-export-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    #task-preview { margin: 0 0 16px; }
+    #task-preview h2 { margin: 0 0 8px; font-size: 14px; }
+    #task-list { max-height: 140px; margin: 0; padding-left: 20px; overflow: auto; }
+    #export-menu { display: inline-block; }
+    #export-menu summary { min-height: 32px; border: 1px solid #1868db; border-radius: 4px; background: #1868db; color: #ffffff; padding: 6px 12px; font-weight: 500; cursor: pointer; }
+    #task-export-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
     #task-export-actions[hidden], #zip[hidden] { display: none !important; }
     #task-export-actions button {
       min-height: 32px;
@@ -47,22 +52,37 @@
 </head>
 <body class="plugin">
   <p id="status" role="status" aria-live="polite">Loading export…</p>
-  <div id="task-export-actions" hidden>
-    <button id="markdown" class="primary">Download Markdown</button>
-    <button id="pdf">Download PDF</button>
-    <button id="zip" hidden>Download ZIP</button>
-  </div>
+  <section id="task-preview" hidden>
+    <h2 id="task-list-heading">Tasks to export</h2>
+    <ul id="task-list"></ul>
+  </section>
+  <details id="export-menu">
+    <summary id="export-trigger">Export</summary>
+    <div id="task-export-actions" hidden>
+      <button id="markdown">Download Markdown</button>
+      <button id="pdf">Download PDF</button>
+      <button id="clipboard">Copy Markdown</button>
+      <button id="zip" hidden>Download ZIP</button>
+    </div>
+  </details>
   <script src="client-export.js"></script>
   <script type="module">
     const status = document.getElementById('status');
     const actions = document.getElementById('task-export-actions');
     const zipButton = document.getElementById('zip');
+    const taskPreview = document.getElementById('task-preview');
+    const taskList = document.getElementById('task-list');
+    const exportMenu = document.getElementById('export-menu');
     const messages = {
       en: {
         loading: 'Loading export…',
         markdown: 'Download Markdown',
         pdf: 'Download PDF',
         zip: 'Download ZIP',
+        clipboard: 'Copy Markdown',
+        copied: 'Markdown copied to the clipboard.',
+        export: 'Export',
+        taskList: 'Tasks to export',
         ready: count => count === 1 ? '1 task ready to export.' : count + ' tasks ready to export.',
         duplicateWarning: ' Duplicate references were skipped.',
         error: 'Unable to prepare the export. Try again or contact an administrator.',
@@ -73,6 +93,10 @@
         markdown: 'Baixar Markdown',
         pdf: 'Baixar PDF',
         zip: 'Baixar ZIP',
+        clipboard: 'Copiar Markdown',
+        copied: 'Markdown copiado para a área de transferência.',
+        export: 'Exportar',
+        taskList: 'Tarefas para exportar',
         ready: count => count === 1 ? '1 tarefa pronta para exportação.' : count + ' tarefas prontas para exportação.',
         duplicateWarning: ' Referências duplicadas foram ignoradas.',
         error: 'Não foi possível preparar a exportação. Tente novamente ou contate um administrador.',
@@ -110,6 +134,21 @@
       }
     };
 
+    const copyMarkdown = async markdown => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(markdown);
+        return;
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = markdown;
+      textarea.style.position = 'fixed';
+      document.body.append(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('Clipboard access was denied.');
+    };
+
     const initialize = async () => {
       const host = await YTApp.register();
       const locale = String(host.locale || 'en').toLowerCase();
@@ -120,6 +159,9 @@
       document.getElementById('markdown').textContent = text.markdown;
       document.getElementById('pdf').textContent = text.pdf;
       zipButton.textContent = text.zip;
+      document.getElementById('clipboard').textContent = text.clipboard;
+      document.getElementById('export-trigger').textContent = text.export;
+      document.getElementById('task-list-heading').textContent = text.taskList;
 
       const payload = await host.fetchApp('markdown-export-http/data', { scope: true });
       status.textContent = text.ready(payload.documents.length);
@@ -127,6 +169,15 @@
         status.classList.add('warning');
         status.textContent += text.duplicateWarning;
       }
+      payload.documents.forEach(document => {
+        const task = document.task || {};
+        const item = document.createElement('li');
+        item.textContent = task.idReadable && task.summary
+          ? task.idReadable + ' — ' + task.summary
+          : document.fileName;
+        taskList.append(item);
+      });
+      taskPreview.hidden = false;
       actions.hidden = false;
 
       document.getElementById('markdown').onclick = () => withBusyButton(
@@ -139,6 +190,22 @@
         () => download(payload.issue.idReadable + '-tasks.pdf', 'application/pdf',
           TaskExportClient.createPdfBytes(payload.markdown))
       );
+      document.getElementById('clipboard').onclick = async () => {
+        const button = document.getElementById('clipboard');
+        button.disabled = true;
+        try {
+          await copyMarkdown(payload.markdown);
+          status.classList.remove('warning');
+          status.textContent = text.copied;
+          exportMenu.open = false;
+        } catch (error) {
+          status.classList.add('warning');
+          status.textContent = text.downloadError;
+          console.error('Task Export: clipboard copy failed.', error);
+        } finally {
+          button.disabled = false;
+        }
+      };
       if (payload.separateFilesForMultipleTasks && payload.documents.length > 1) {
         zipButton.hidden = false;
         zipButton.onclick = () => withBusyButton(
