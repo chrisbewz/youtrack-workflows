@@ -25,8 +25,8 @@ test('keeps long Markdown content across multiple PDF pages', () => {
 
 test('creates a ZIP archive containing the requested Markdown files', () => {
   const bytes = createZipBytes([
-    { name: 'E3-374.md', content: '# Root\n' },
-    { name: 'E3-375.md', content: '# Child\n' }
+    { fileName: 'E3-374.md', content: '# Root\n' },
+    { fileName: 'E3-375.md', content: '# Child\n' }
   ]);
   const text = Buffer.from(bytes).toString('latin1');
 

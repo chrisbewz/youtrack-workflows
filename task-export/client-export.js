@@ -140,7 +140,7 @@ const createZipBytes = files => {
   const centralRecords = [];
   let offset = 0;
   files.forEach(file => {
-    const name = encoder().encode(file.name);
+    const name = encoder().encode(file.name || file.fileName);
     const content = encoder().encode(file.content);
     const header = concatBytes([
       Uint8Array.from([0x50, 0x4b, 0x03, 0x04]),
