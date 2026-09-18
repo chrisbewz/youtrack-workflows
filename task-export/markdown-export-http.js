@@ -30,6 +30,7 @@ const buildExportPayload = ctx => {
     includeSubtasks: options.includeSubtasks
   });
   const documents = collection.issues.map(issue => ({
+    idReadable: issue.idReadable,
     task: {
       idReadable: issue.idReadable,
       summary: issue.summary,

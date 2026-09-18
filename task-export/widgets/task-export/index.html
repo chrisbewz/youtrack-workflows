@@ -295,7 +295,7 @@
         const headingText = heading ? heading[1].replace(/\\(.)/g, '$1') : exportDocument.fileName;
         const summary = task.summary || headingText.replace(/^.*\.md\s+—\s+/, '');
         return {
-          idReadable: task.idReadable || (fileId ? fileId[1] : exportDocument.fileName),
+          idReadable: exportDocument.idReadable || task.idReadable || (fileId ? fileId[1] : exportDocument.fileName),
           summary,
           title: typeof exportDocument.originalTitle === 'string'
             ? exportDocument.originalTitle

@@ -42,6 +42,8 @@ test('JSON export endpoint returns documents and export options for the widget',
 
   assert.equal(response.value.documents.length, 2);
   assert.equal(response.value.documents[0].fileName, 'E3-374-root-task.md');
+  assert.equal(response.value.documents[0].idReadable, 'E3-374');
+  assert.equal(response.value.documents[1].idReadable, 'E3-375');
   assert.equal(response.value.documents[0].originalTitle, 'Root task');
   assert.equal(response.value.documents[1].originalTitle, 'Child task');
   assert.deepEqual(response.value.documents[0].task, {
