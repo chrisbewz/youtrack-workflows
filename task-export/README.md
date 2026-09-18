@@ -86,3 +86,10 @@ npm run upload-task-export:prod
 
 Upload targets use the local `.npmrc` configuration documented in the
 [repository README](../README.md).
+
+## Container integration environment
+
+The isolated Task Export environment starts a local YouTrack Server and runs
+the repository suite before uploading the local app package to that instance.
+It has no external service dependency. Follow the setup, execution, cleanup,
+and troubleshooting instructions in the [integration environment guide](../tests/integration/README.md#task-export).

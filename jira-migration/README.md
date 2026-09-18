@@ -122,3 +122,19 @@ npm run upload-jira-migration:prod
 
 Upload targets use the local `.npmrc` configuration documented in the
 [repository README](../README.md).
+
+## Container integration environment
+
+The Jira Synchronization Manager integration environment starts a local
+YouTrack Server and connects it to a dedicated Jira Cloud Free sandbox. It
+does not use a self-hosted Jira installation or a Jira Data Center license.
+The container runner verifies both authenticated APIs, confirms access to the
+configured sandbox project, runs the repository suite, and uploads the local
+workflow package to the local YouTrack instance.
+
+The current workflow setting `jiraApiToken` expects the Base64 representation
+of `email:api-token` for its Basic Authorization header. The integration
+environment receives the email and raw API token separately so it can verify
+the Jira Cloud API safely; encode the value locally before setting
+`jiraApiToken` in YouTrack. Full setup, execution, cleanup, and troubleshooting
+instructions are in the [integration environment guide](../tests/integration/README.md#jira-migration).

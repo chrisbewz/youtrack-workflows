@@ -4,6 +4,7 @@ npm-debug.log*
 
 # Environment and configuration files
 .npmrc
+tests/integration/**/.env.local
 
 # IDE-specific files
 .idea/

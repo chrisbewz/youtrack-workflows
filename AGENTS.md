@@ -14,6 +14,8 @@ manifest, settings schema, tests, and README aligned.
 | `task-export/` | Task Export YouTrack app. |
 | `scripts/upload-workflow.js` | Shared staging and upload script. |
 | `tests/` | Node test suite for shared and workflow-specific behavior. |
+| `tests/integration/` | Isolated Docker Compose environments and integration runner. |
+| `mise.toml` | Repository Node version and local validation/integration commands. |
 | `README.md` | Repository overview, local configuration, commands, and workflow index. |
 
 ## Workflow documentation
@@ -41,6 +43,8 @@ Keep workflow documentation in English.
 2. Preserve unrelated working-tree changes. Never add `.npmrc`, `.env`, IDE
    directories, or other local configuration to a change.
 3. Add or update a focused regression test for behavior changes.
+   For integration-environment changes, update `tests/integration/README.md`
+   and the affected workflow README in the same change.
 4. Run the narrowest relevant tests, then run the full suite:
 
    ```powershell

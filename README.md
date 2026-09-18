@@ -12,6 +12,7 @@ Custom YouTrack workflows and apps maintained in this repository.
 ## Prerequisites
 
 - Node.js 18 or newer for local validation and uploads.
+- mise 2026.1 or newer for repository automation commands.
 - A YouTrack permanent token with permission to upload the selected workflow.
 - Workflow-specific external credentials, when applicable. See the reference for
   the Jira synchronization requirements.
@@ -53,3 +54,14 @@ Validate changes before uploading:
 npm test
 git diff --check
 ```
+
+## Container integration environments
+
+Each workflow has an isolated Docker Compose environment under
+[`tests/integration/`](tests/integration/README.md). The environments run a
+local YouTrack Server and use only local secrets or CI secrets. The Jira
+Synchronization Manager environment connects to a dedicated Jira Cloud Free
+sandbox; it does not run Jira Data Center locally.
+
+[`mise.toml`](mise.toml) provides the supported local commands. Run `mise
+tasks` to list them, then start with `mise run integration:task-export:init`.
