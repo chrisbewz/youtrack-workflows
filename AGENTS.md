@@ -40,8 +40,8 @@ Keep workflow documentation in English.
 
 1. Inspect the relevant manifest, settings schema, implementation, tests, and
    workflow README before making a change.
-2. Preserve unrelated working-tree changes. Never add `.npmrc`, `.env`, IDE
-   directories, or other local configuration to a change.
+2. Preserve unrelated working-tree changes. Never add `.npmrc`, `.env`,
+   `.env.<profile>`, IDE directories, or other local configuration to a change.
 3. Add or update a focused regression test for behavior changes.
    For integration-environment changes, update `tests/integration/README.md`
    and the affected workflow README in the same change.

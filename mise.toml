@@ -17,25 +17,25 @@ run = "node scripts/init-integration-environment.js task-export"
 
 [tasks."integration:task-export:up"]
 description = "Start the local YouTrack service for Task Export"
-run = "docker compose --env-file tests/integration/task-export/.env.local -f tests/integration/task-export/compose.yml up -d youtrack"
+run = "node scripts/run-integration-compose.js task-export up -d youtrack"
 
 [tasks."integration:task-export:logs"]
 description = "Follow Task Export YouTrack logs, including the first-run wizard URL"
-run = "docker compose --env-file tests/integration/task-export/.env.local -f tests/integration/task-export/compose.yml logs -f youtrack"
+run = "node scripts/run-integration-compose.js task-export logs -f youtrack"
 
 [tasks."integration:task-export:verify"]
 description = "Run Task Export integration verification against local YouTrack"
-run = "docker compose --env-file tests/integration/task-export/.env.local -f tests/integration/task-export/compose.yml --profile verify up --build --abort-on-container-exit --exit-code-from runner"
+run = "node scripts/run-integration-compose.js task-export --profile verify up --build --abort-on-container-exit --exit-code-from runner"
 timeout = "20m"
 
 [tasks."integration:task-export:down"]
 description = "Stop Task Export integration containers and keep local YouTrack data"
-run = "docker compose --env-file tests/integration/task-export/.env.local -f tests/integration/task-export/compose.yml down"
+run = "node scripts/run-integration-compose.js task-export down"
 
 [tasks."integration:task-export:reset"]
 description = "Delete Task Export local YouTrack volumes and configuration"
 confirm = "This removes the local Task Export YouTrack data and wizard state. Continue?"
-run = "docker compose --env-file tests/integration/task-export/.env.local -f tests/integration/task-export/compose.yml down -v"
+run = "node scripts/run-integration-compose.js task-export down -v"
 
 [tasks."integration:jira-migration:init"]
 description = "Create the ignored Jira Migration integration environment file"
@@ -43,22 +43,22 @@ run = "node scripts/init-integration-environment.js jira-migration"
 
 [tasks."integration:jira-migration:up"]
 description = "Start the local YouTrack service for Jira Migration"
-run = "docker compose --env-file tests/integration/jira-migration/.env.local -f tests/integration/jira-migration/compose.yml up -d youtrack"
+run = "node scripts/run-integration-compose.js jira-migration up -d youtrack"
 
 [tasks."integration:jira-migration:logs"]
 description = "Follow Jira Migration YouTrack logs, including the first-run wizard URL"
-run = "docker compose --env-file tests/integration/jira-migration/.env.local -f tests/integration/jira-migration/compose.yml logs -f youtrack"
+run = "node scripts/run-integration-compose.js jira-migration logs -f youtrack"
 
 [tasks."integration:jira-migration:verify"]
 description = "Run Jira Migration integration verification against local YouTrack and Jira Cloud"
-run = "docker compose --env-file tests/integration/jira-migration/.env.local -f tests/integration/jira-migration/compose.yml --profile verify up --build --abort-on-container-exit --exit-code-from runner"
+run = "node scripts/run-integration-compose.js jira-migration --profile verify up --build --abort-on-container-exit --exit-code-from runner"
 timeout = "20m"
 
 [tasks."integration:jira-migration:down"]
 description = "Stop Jira Migration integration containers and keep local YouTrack data"
-run = "docker compose --env-file tests/integration/jira-migration/.env.local -f tests/integration/jira-migration/compose.yml down"
+run = "node scripts/run-integration-compose.js jira-migration down"
 
 [tasks."integration:jira-migration:reset"]
 description = "Delete Jira Migration local YouTrack volumes and configuration"
 confirm = "This removes the local Jira Migration YouTrack data and wizard state. Continue?"
-run = "docker compose --env-file tests/integration/jira-migration/.env.local -f tests/integration/jira-migration/compose.yml down -v"
+run = "node scripts/run-integration-compose.js jira-migration down -v"
