@@ -1,8 +1,50 @@
 const { renderTaskMarkdown } = require('./markdown-renderer');
-const { buildMarkdownDownloadHeaders } = require('./export-artifact');
+const { buildMarkdownDownloadHeaders, buildMarkdownFilename } = require('./export-artifact');
 const { collectIssues } = require('./issue-export-collector');
 const { composeMarkdownDocuments } = require('./markdown-composer');
 const { renderRelationDiagram } = require('./relation-diagram');
+
+const isEnabled = value => value === true || value === 'true';
+
+const buildExportPayload = ctx => {
+  const collection = collectIssues(ctx.issue, {
+    includeSubtasks: isEnabled(ctx.settings.includeSubtasks)
+  });
+  const documents = collection.issues.map(issue => ({
+    fileName: buildMarkdownFilename(issue),
+    markdown: renderTaskMarkdown({
+      summary: issue.summary,
+      description: issue.description,
+      fields: issue.fields,
+      tags: issue.tags
+    }, {
+      includeFields: isEnabled(ctx.settings.includeFields),
+      includeTags: isEnabled(ctx.settings.includeTags)
+    })
+  }));
+  let markdown = composeMarkdownDocuments(documents.map(document => document.markdown));
+  if (isEnabled(ctx.settings.includeTaskRelationDiagram)) {
+    const diagram = renderRelationDiagram(collection.issues);
+    if (diagram) markdown += '\n' + diagram;
+  }
+  return {
+    issue: {
+      id: ctx.issue.id,
+      idReadable: ctx.issue.idReadable,
+      summary: ctx.issue.summary
+    },
+    markdown,
+    documents,
+    warnings: collection.warnings,
+    separateFilesForMultipleTasks: isEnabled(ctx.settings.separateFilesForMultipleTasks)
+  };
+};
+
+const addWarningsHeader = (ctx, warnings) => {
+  if (warnings.length > 0) {
+    ctx.response.addHeader('X-Task-Export-Warnings', String(warnings.length));
+  }
+};
 
 exports.httpHandler = {
   endpoints: [
@@ -12,43 +54,21 @@ exports.httpHandler = {
       path: 'markdown',
       permissions: ['READ_ISSUE'],
       handle: ctx => {
-        const collection = collectIssues(ctx.issue, {
-          includeSubtasks: ctx.settings.includeSubtasks
-        });
-        let markdown = composeMarkdownDocuments(collection.issues.map(issue =>
-          renderTaskMarkdown({
-            summary: issue.summary,
-            description: issue.description,
-            fields: issue.fields,
-            tags: issue.tags
-          }, {
-            includeFields: ctx.settings.includeFields,
-            includeTags: ctx.settings.includeTags
-          })
-        ));
-        if (ctx.settings.includeTaskRelationDiagram === true ||
-            ctx.settings.includeTaskRelationDiagram === 'true') {
-          const diagram = renderRelationDiagram(collection.issues);
-          if (diagram) markdown += '\n' + diagram;
-        }
-
-        const headers = buildMarkdownDownloadHeaders({
-          idReadable: ctx.issue.idReadable,
-          id: ctx.issue.id,
-          summary: ctx.issue.summary
-        });
-
-        Object.entries(headers).forEach(([name, value]) => {
-          ctx.response.addHeader(name, value);
-        });
-        if (collection.warnings.length > 0) {
-          ctx.response.addHeader(
-            'X-Task-Export-Warnings',
-            String(collection.warnings.length)
-          );
-        }
-        ctx.response.text(markdown);
+        const payload = buildExportPayload(ctx);
+        const headers = buildMarkdownDownloadHeaders(payload.issue);
+        Object.entries(headers).forEach(([name, value]) => ctx.response.addHeader(name, value));
+        addWarningsHeader(ctx, payload.warnings);
+        ctx.response.text(payload.markdown);
       }
+    },
+    {
+      scope: 'issue',
+      method: 'GET',
+      path: 'data',
+      permissions: ['READ_ISSUE'],
+      handle: ctx => ctx.response.json(buildExportPayload(ctx))
     }
   ]
 };
+
+exports.buildExportPayload = buildExportPayload;

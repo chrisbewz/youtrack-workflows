@@ -11,28 +11,28 @@
     },
     "includeTaskRelationDiagram": {
       "title": "Include task relation diagram",
-      "description": "Reserved for the Mermaid relation diagram increment.",
+      "description": "Adds a Mermaid diagram for relations among exported tasks.",
       "type": "boolean",
       "x-scope": "PROJECT",
       "default": false
     },
     "includeFields": {
       "title": "Include fields",
-      "description": "Reserved for the issue fields increment.",
+      "description": "Adds configured issue fields to each exported task.",
       "type": "boolean",
       "x-scope": "PROJECT",
       "default": false
     },
     "includeTags": {
       "title": "Include tags",
-      "description": "Reserved for the issue tags increment.",
+      "description": "Adds issue tags to each exported task.",
       "type": "boolean",
       "x-scope": "PROJECT",
       "default": false
     },
     "separateFilesForMultipleTasks": {
       "title": "Separate files for multiple tasks",
-      "description": "Reserved for the ZIP packaging increment.",
+      "description": "Enables a separate Markdown file inside the ZIP download when multiple tasks are exported.",
       "type": "boolean",
       "x-scope": "PROJECT",
       "default": false

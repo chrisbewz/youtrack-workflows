@@ -4,6 +4,16 @@
   "title": "Task Export",
   "version": "0.1.0",
   "minYouTrackVersion": "2024.3.0",
+  "widgets": [
+    {
+      "key": "task-export-menu",
+      "name": "Exportar task",
+      "description": "Baixa a issue atual em Markdown, PDF ou ZIP.",
+      "extensionPoint": "ISSUE_OPTIONS_MENU_ITEM",
+      "indexPath": "task-export/index.html",
+      "permissions": ["ISSUE_READ"]
+    }
+  ],
   "vendor": {
     "name": "Christian Celso Bewzenko",
     "email": "crisbewz02@gmail.com"

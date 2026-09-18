@@ -1,8 +1,7 @@
 # Task Export
 
-The current increment exposes an issue-scoped HTTP handler that returns the
-selected YouTrack issue, optionally including recursive subtasks, as a UTF-8
-Markdown download.
+The app exposes an issue-scoped HTTP handler and an issue options-menu action
+that export the selected YouTrack issue as UTF-8 Markdown, PDF or ZIP.
 
 ## Endpoint
 
@@ -28,10 +27,23 @@ relation diagram add the corresponding sections to the Markdown output.
 
 The endpoint does not modify the issue or create an attachment.
 
+## Issue action
+
+The app adds Exportar task to the issue options menu. The action provides:
+
+- Markdown download using the canonical composed document.
+- PDF download generated in the browser.
+- ZIP download with one Markdown file per task when Separate files for
+  multiple tasks is enabled and more than one task is exported.
+
+The JSON endpoint used by the widget is:
+
+~~~text
+GET /api/issues/{issueId}/extensionEndpoints/task-export/markdown-export-http/data
+~~~
+
 ## Upload
 
 ~~~powershell
 npm run upload-task-export:test --host_test=... --token_test=...
 ~~~
-
-PDF, ZIP packaging and a UI action remain planned for subsequent increments.

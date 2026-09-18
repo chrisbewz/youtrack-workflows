@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Exportar task</title>
+  <style>
+    body { font: 14px sans-serif; margin: 0; padding: 16px; color: #202124; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button { border: 1px solid #9aa0a6; border-radius: 4px; background: #fff; padding: 8px 12px; cursor: pointer; }
+    button.primary { background: #1868db; border-color: #1868db; color: #fff; }
+    button:disabled { cursor: wait; opacity: .6; }
+    #status { margin: 0 0 12px; }
+    .warning { color: #b54708; }
+  </style>
+</head>
+<body class="plugin">
+  <p id="status">Carregando exportação...</p>
+  <div class="actions" hidden>
+    <button id="markdown" class="primary">Baixar Markdown</button>
+    <button id="pdf">Baixar PDF</button>
+    <button id="zip" hidden>Baixar ZIP</button>
+  </div>
+  <script src="../../client-export.js"></script>
+  <script type="module">
+    const host = await YTApp.register();
+    const status = document.getElementById('status');
+    const actions = document.querySelector('.actions');
+    const zipButton = document.getElementById('zip');
+    const payload = await host.fetchApp('data', { scope: true });
+
+    const download = (fileName, mimeType, content) => {
+      const body = content instanceof Uint8Array ? content : new TextEncoder().encode(content);
+      const blob = new Blob([body], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+
+    const withBusyButton = (button, action) => {
+      button.disabled = true;
+      try { action(); } finally { button.disabled = false; }
+    };
+
+    status.textContent = payload.documents.length + ' task(s) pronta(s) para exportação.';
+    if (payload.warnings.length) {
+      status.classList.add('warning');
+      status.textContent += ' Algumas referências duplicadas foram ignoradas.';
+    }
+    actions.hidden = false;
+
+    document.getElementById('markdown').onclick = () => withBusyButton(
+      document.getElementById('markdown'),
+      () => download(payload.documents.length === 1 ? payload.documents[0].fileName : 'tasks.md',
+        'text/markdown; charset=utf-8', payload.markdown)
+    );
+    document.getElementById('pdf').onclick = () => withBusyButton(
+      document.getElementById('pdf'),
+      () => download(payload.issue.idReadable + '-tasks.pdf', 'application/pdf',
+        TaskExportClient.createPdfBytes(payload.markdown))
+    );
+    if (payload.separateFilesForMultipleTasks && payload.documents.length > 1) {
+      zipButton.hidden = false;
+      zipButton.onclick = () => withBusyButton(
+        zipButton,
+        () => download(payload.issue.idReadable + '-tasks.zip', 'application/zip',
+          TaskExportClient.createZipBytes(payload.documents))
+      );
+    }
+  </script>
+</body>
+</html>
