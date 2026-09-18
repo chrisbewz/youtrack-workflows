@@ -45,9 +45,29 @@ test('preserves Markdown hierarchy when generating a PDF', () => {
   assert.match(text, /\/F2 18 Tf/);
   assert.match(text, /\/F2 15 Tf/);
   assert.match(text, /\/F3 10 Tf/);
+  assert.match(text, /BT 50 790 Td 0 0 0 rg \/F2 18 Tf/);
+  assert.match(text, /\/F2 11 Tf \(Proposal:\) Tj/);
   assert.match(text, /First step/);
   assert.match(text, /const answer = 42;/);
   assert.doesNotMatch(text, /\# E3-374 Root task/);
+  assert.doesNotMatch(text, /NaN/);
+});
+
+test('keeps common Unicode checklist and list markers readable in PDFs', () => {
+  const text = Buffer.from(createPdfBytes('• Bullet\n☑ Done\n🔹 Detail')).toString('latin1');
+
+  assert.match(text, /\x95 Bullet/);
+  assert.match(text, /\[x\] Done/);
+  assert.match(text, /- Detail/);
+  assert.doesNotMatch(text, /\? Bullet/);
+});
+
+test('preserves Markdown links as clickable PDF annotations', () => {
+  const text = Buffer.from(createPdfBytes('Read [the documentation](https://example.com/docs).')).toString('latin1');
+
+  assert.match(text, /the documentation/);
+  assert.match(text, /\/Subtype \/Link/);
+  assert.match(text, /\/URI \(https:\/\/example\.com\/docs\)/);
 });
 
 test('creates a ZIP archive containing the requested Markdown files', () => {

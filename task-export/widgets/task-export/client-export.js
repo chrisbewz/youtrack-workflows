@@ -22,11 +22,26 @@ const littleEndian = (value, size) => {
   return result;
 };
 
+const WIN_ANSI_BYTES = new Map([
+  [0x2018, 0x91], [0x2019, 0x92], [0x201c, 0x93], [0x201d, 0x94],
+  [0x2022, 0x95], [0x2013, 0x96], [0x2014, 0x97], [0x2026, 0x85],
+  [0x20ac, 0x80], [0x2122, 0x99]
+]);
+
+const PDF_TEXT_FALLBACKS = new Map([
+  [0x25e6, '-'], [0x2610, '[ ]'], [0x2611, '[x]'], [0x2612, '[x]'],
+  [0x2705, '[x]'], [0x2713, '[x]'], [0x2714, '[x]'], [0x1f539, '-'], [0x1f4cc, '-']
+]);
+
 const toWinAnsi = value => {
   const result = [];
   for (const character of value) {
     const codePoint = character.codePointAt(0);
-    result.push(codePoint <= 255 ? codePoint : 63);
+    if (codePoint <= 255) result.push(codePoint);
+    else if (WIN_ANSI_BYTES.has(codePoint)) result.push(WIN_ANSI_BYTES.get(codePoint));
+    else if (PDF_TEXT_FALLBACKS.has(codePoint)) {
+      PDF_TEXT_FALLBACKS.get(codePoint).split('').forEach(fallback => result.push(fallback.charCodeAt(0)));
+    } else result.push(63);
   }
   return Uint8Array.from(result);
 };
@@ -40,6 +55,11 @@ const escapePdfString = bytes => {
   return Uint8Array.from(result);
 };
 
+const approximateTextWidth = (text, font, size) => {
+  const widthFactor = font === 'F3' ? 0.6 : font === 'F2' ? 0.55 : 0.52;
+  return Math.max(1, toWinAnsi(text).length * size * widthFactor);
+};
+
 const stripMarkdown = value => String(value)
   .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
   .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -49,6 +69,27 @@ const stripMarkdown = value => String(value)
   .replace(/\*([^*]+)\*/g, '$1')
   .replace(/_([^_]+)_/g, '$1')
   .replace(/\\([\\`*_{}\[\]()#+.!\-])/g, '$1');
+
+const inlineSegments = (value, defaultFont) => {
+  const input = String(value)
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');
+  const segments = [];
+  const add = (text, font, href) => {
+    const content = stripMarkdown(text);
+    if (content) segments.push({ text: content, font, href });
+  };
+  const pattern = /(\*\*|__)(.+?)\1|`([^`]+)`|\[([^\]]+)\]\(([^\s)]+)\)/g;
+  let cursor = 0;
+  let match;
+  while ((match = pattern.exec(input))) {
+    add(input.slice(cursor, match.index), defaultFont);
+    if (match[4]) add(match[4], defaultFont, match[5]);
+    else add(match[2] || match[3], match[2] ? 'F2' : 'F3');
+    cursor = match.index + match[0].length;
+  }
+  add(input.slice(cursor), defaultFont);
+  return segments.length ? segments : [{ text: '', font: defaultFont }];
+};
 
 const wrapLine = (line, maximumLength) => {
   const words = line.split(/\s+/);
@@ -94,22 +135,23 @@ const markdownBlocks = markdown => {
     if (heading) {
       const level = heading[1].length;
       const style = level === 1
-        ? { font: 'F2', size: 18, leading: 26, maximumLength: 56 }
+        ? { font: 'F2', size: 18, leading: 26, maximumLength: 56, indent: 0 }
         : level === 2
-          ? { font: 'F2', size: 15, leading: 22, maximumLength: 68 }
-          : { font: 'F2', size: 12, leading: 18, maximumLength: 82 };
+          ? { font: 'F2', size: 15, leading: 22, maximumLength: 68, indent: 0 }
+          : { font: 'F2', size: 12, leading: 18, maximumLength: 82, indent: 0 };
       wrapLine(stripMarkdown(heading[2]), style.maximumLength).forEach(text => blocks.push({ ...style, text }));
       return;
     }
 
     const list = rawLine.match(/^(\s*)([-*+]|\d+[.)])\s+(.+)$/);
     if (list) {
-      const marker = /^\d/.test(list[2]) ? list[2] : '•';
+      const marker = /^\d/.test(list[2]) ? list[2] : '\u2022';
       const indent = Math.min(36, Math.floor(list[1].length / 2) * 12);
-      const wrapped = wrapLine(stripMarkdown(marker + ' ' + list[3]), 88 - Math.floor(indent / 6));
+      const wrapped = wrapLine(marker + ' ' + list[3], 88 - Math.floor(indent / 6));
       wrapped.forEach((text, lineIndex) => blocks.push({
         text: lineIndex === 0 ? text : '  ' + text,
-        font: 'F1', size: 11, leading: 15, indent
+        font: 'F1', size: 11, leading: 15, indent,
+        segments: inlineSegments(lineIndex === 0 ? text : '  ' + text, 'F1')
       }));
       return;
     }
@@ -124,13 +166,14 @@ const markdownBlocks = markdown => {
     }
 
     const quote = rawLine.match(/^>\s?(.+)$/);
-    const text = stripMarkdown(quote ? quote[1] : rawLine);
+    const text = quote ? quote[1] : rawLine;
     wrapLine(text, quote ? 82 : 92).forEach(line => blocks.push({
-      text: line,
+      text: stripMarkdown(line),
       font: 'F1',
       size: 11,
       leading: 15,
-      indent: quote ? 12 : 0
+      indent: quote ? 12 : 0,
+      segments: inlineSegments(line, 'F1')
     }));
   });
 
@@ -158,18 +201,35 @@ const createPdfBytes = markdown => {
   const regularFontObjectNumber = 3 + pages.length * 2;
   const boldFontObjectNumber = regularFontObjectNumber + 1;
   const codeFontObjectNumber = regularFontObjectNumber + 2;
+  const firstAnnotationObjectNumber = codeFontObjectNumber + 1;
   const pageObjects = [];
   const contentObjects = [];
+  const annotationObjects = [];
   pages.forEach((pageBlocks, pageIndex) => {
     const contentParts = [];
+    const pageAnnotationReferences = [];
     let y = 790;
     pageBlocks.forEach(block => {
       if (block.divider) {
         contentParts.push('0.75 w 50 ' + y + ' m 545 ' + y + ' l S\n');
       } else if (!block.spacer) {
-        contentParts.push('BT /' + block.font + ' ' + block.size + ' Tf ' + (50 + block.indent) + ' ' + y + ' Td (');
-        contentParts.push(escapePdfString(toWinAnsi(block.text)));
-        contentParts.push(') Tj ET\n');
+        let x = 50 + (block.indent || 0);
+        contentParts.push('BT ' + x + ' ' + y + ' Td ');
+        (block.segments || [{ text: block.text, font: block.font }]).forEach(segment => {
+          const width = approximateTextWidth(segment.text, segment.font, block.size);
+          if (segment.href) {
+            const objectNumber = firstAnnotationObjectNumber + annotationObjects.length;
+            pageAnnotationReferences.push(objectNumber + ' 0 R');
+            annotationObjects.push({ objectNumber, href: segment.href, x, y, width, height: block.size });
+            contentParts.push('0 0.35 0.75 rg ');
+          } else contentParts.push('0 0 0 rg ');
+          contentParts.push('/' + segment.font + ' ' + block.size + ' Tf (');
+          contentParts.push(escapePdfString(toWinAnsi(segment.text)));
+          contentParts.push(') Tj ');
+          if (segment.href) contentParts.push('0.5 w ' + x + ' ' + (y - 1) + ' m ' + (x + width) + ' ' + (y - 1) + ' l S ');
+          x += width;
+        });
+        contentParts.push('ET\n');
       }
       y -= block.leading;
     });
@@ -179,7 +239,8 @@ const createPdfBytes = markdown => {
     pageObjects.push(pdfObject(pageObjectNumber, ascii(
       '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ' +
       regularFontObjectNumber + ' 0 R /F2 ' + boldFontObjectNumber + ' 0 R /F3 ' + codeFontObjectNumber +
-      ' 0 R >> >> /Contents ' + contentObjectNumber + ' 0 R >>'
+      ' 0 R >> >> /Contents ' + contentObjectNumber + ' 0 R' +
+      (pageAnnotationReferences.length ? ' /Annots [' + pageAnnotationReferences.join(' ') + ']' : '') + ' >>'
     )));
     contentObjects.push(pdfObject(contentObjectNumber, concatBytes([
       ascii('<< /Length ' + content.length + ' >>\nstream\n'), content, ascii('endstream')
@@ -192,7 +253,14 @@ const createPdfBytes = markdown => {
     ...pageObjects.flatMap((page, index) => [page, contentObjects[index]]),
     pdfObject(regularFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>')),
     pdfObject(boldFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>')),
-    pdfObject(codeFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>'))
+    pdfObject(codeFontObjectNumber, ascii('<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>')),
+    ...annotationObjects.map(annotation => pdfObject(annotation.objectNumber, concatBytes([
+      ascii('<< /Type /Annot /Subtype /Link /Rect [' + annotation.x + ' ' + (annotation.y - 2) + ' ' +
+        (annotation.x + annotation.width) + ' ' + (annotation.y + annotation.height) +
+        '] /Border [0 0 0] /A << /S /URI /URI ('),
+      escapePdfString(toWinAnsi(annotation.href)),
+      ascii(') >> >>')
+    ])))
   ];
   const header = ascii('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
   const offsets = [0];
