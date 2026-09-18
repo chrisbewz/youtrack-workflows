@@ -2,15 +2,16 @@
   "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name": "task-export",
   "title": "Task Export",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "minYouTrackVersion": "2024.3.0",
   "widgets": [
     {
       "key": "task-export-menu",
-      "name": "Exportar task",
-      "description": "Baixa a issue atual em Markdown, PDF ou ZIP.",
+      "name": "Export task",
+      "description": "Download the current issue as Markdown, PDF, or ZIP.",
       "extensionPoint": "ISSUE_OPTIONS_MENU_ITEM",
       "indexPath": "task-export/index.html",
+      "iconPath": "icons/export.svg",
       "permissions": ["READ_ISSUE"]
     }
   ],
