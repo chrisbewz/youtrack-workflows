@@ -4,6 +4,11 @@ npm-debug.log*
 
 # Environment and configuration files
 .npmrc
+.local/
+mise.local.toml
+mise.*.local.toml
+tests/integration/**/.env.*
+!tests/integration/**/.env.example
 
 # IDE-specific files
 .idea/
@@ -13,3 +18,5 @@ npm-debug.log*
 Thumbs.db
 /sample/
 !sample/debug-local.js
+
+.vs/

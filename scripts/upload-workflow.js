@@ -80,6 +80,7 @@ const uploadWorkflow = (workflowName, environmentName) => {
       '--token=' + token
     ], {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }
     });
     if (result.error) throw result.error;

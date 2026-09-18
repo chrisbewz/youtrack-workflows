@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/youtrack-app.json",
+  "name": "task-export",
+  "title": "Task Export",
+  "version": "0.1.22",
+  "minYouTrackVersion": "2024.3.0",
+  "widgets": [
+    {
+      "key": "task-export-menu",
+      "name": "Export task",
+      "description": "Download the current issue as Markdown, PDF, or ZIP.",
+      "extensionPoint": "ISSUE_OPTIONS_MENU_ITEM",
+      "indexPath": "task-export/index.html",
+      "iconPath": "widgets/task-export/icons/export.svg",
+      "permissions": ["READ_ISSUE"]
+    }
+  ],
+  "vendor": {
+    "name": "Christian Celso Bewzenko",
+    "email": "crisbewz02@gmail.com"
+  }
+}
