@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/youtrack-app.json",
+  "name": "task-export",
+  "title": "Task Export",
+  "version": "0.1.0",
+  "minYouTrackVersion": "2024.3.0",
+  "vendor": {
+    "name": "Christian Celso Bewzenko",
+    "email": "crisbewz02@gmail.com"
+  }
+}
