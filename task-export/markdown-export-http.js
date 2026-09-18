@@ -17,6 +17,7 @@ const buildExportPayload = ctx => {
       description: issue.description == null ? '' : String(issue.description)
     },
     fileName: buildMarkdownFilename(issue),
+    originalTitle: issue.summary,
     markdown: renderTaskMarkdown({
       summary: issue.summary,
       description: issue.description,

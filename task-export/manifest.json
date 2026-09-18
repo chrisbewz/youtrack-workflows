@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name": "task-export",
   "title": "Task Export",
-  "version": "0.1.11",
+  "version": "0.1.16",
   "minYouTrackVersion": "2024.3.0",
   "widgets": [
     {

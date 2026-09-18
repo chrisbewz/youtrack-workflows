@@ -67,7 +67,7 @@
     <label id="task-sort-label" for="task-sort">Quick order</label>
     <select id="task-sort">
       <option value="manual">Manual order</option>
-      <option value="description">Task description (natural)</option>
+      <option value="title">Task title (natural)</option>
       <option value="id">Task ID (natural)</option>
     </select>
     <ol id="task-list" tabindex="0"></ol>
@@ -104,7 +104,7 @@
         reordered: ' Export order updated.',
         quickOrder: 'Quick order',
         manualOrder: 'Manual order',
-        descriptionOrder: 'Task description (natural)',
+        titleOrder: 'Task title (natural)',
         idOrder: 'Task ID (natural)',
         sorted: ' Tasks sorted.',
         ready: count => count === 1 ? '1 task ready to export.' : count + ' tasks ready to export.',
@@ -125,7 +125,7 @@
         reordered: ' Ordem de exportação atualizada.',
         quickOrder: 'Ordenação rápida',
         manualOrder: 'Ordem manual',
-        descriptionOrder: 'Descrição da tarefa (natural)',
+        titleOrder: 'Título da tarefa (natural)',
         idOrder: 'ID da tarefa (natural)',
         sorted: ' Tarefas ordenadas.',
         ready: count => count === 1 ? '1 tarefa pronta para exportação.' : count + ' tarefas prontas para exportação.',
@@ -195,26 +195,38 @@
       document.getElementById('task-list-heading').textContent = text.taskList;
       document.getElementById('task-list-hint').textContent = text.reorderHint;
       document.getElementById('task-sort-label').textContent = text.quickOrder;
-      taskSort.options.manual.textContent = text.manualOrder;
-      taskSort.options.description.textContent = text.descriptionOrder;
-      taskSort.options.id.textContent = text.idOrder;
+      taskSort.querySelector('option[value="manual"]').textContent = text.manualOrder;
+      taskSort.querySelector('option[value="title"]').textContent = text.titleOrder;
+      taskSort.querySelector('option[value="id"]').textContent = text.idOrder;
 
       const payload = await host.fetchApp('markdown-export-http/data', { scope: true });
       let orderedDocuments = payload.documents.slice();
+      const taskDetails = exportDocument => {
+        const task = exportDocument.task || {};
+        const heading = String(exportDocument.markdown || '').match(/^#\s+(.+)$/m);
+        const fileId = String(exportDocument.fileName || '').match(/^([A-Za-z]+-\d+)-/);
+        const headingText = heading ? heading[1].replace(/\\(.)/g, '$1') : exportDocument.fileName;
+        const summary = task.summary || headingText.replace(/^.*\.md\s+—\s+/, '');
+        return {
+          idReadable: task.idReadable || (fileId ? fileId[1] : exportDocument.fileName),
+          summary,
+          title: typeof exportDocument.originalTitle === 'string'
+            ? exportDocument.originalTitle
+            : summary
+        };
+      };
       const orderedMarkdown = () => orderedDocuments.map(exportDocument => exportDocument.markdown).join('\n---\n\n') +
         (payload.trailingMarkdown || '');
       const renderTaskList = () => {
         taskList.replaceChildren();
         orderedDocuments.forEach(exportDocument => {
-          const task = exportDocument.task || {};
+          const task = taskDetails(exportDocument);
           const item = document.createElement('li');
           item.className = 'task-item';
           item.draggable = true;
           item.tabIndex = 0;
           item.innerHTML = '<span class="drag-handle" aria-hidden="true">⠿</span>';
-          item.append(document.createTextNode(task.idReadable && task.summary
-            ? task.idReadable + ' — ' + task.summary
-            : exportDocument.fileName));
+          item.append(document.createTextNode(task.idReadable + ' — ' + task.summary));
           item.addEventListener('dragstart', event => {
             item.classList.add('dragging');
             event.dataTransfer.effectAllowed = 'move';
@@ -242,14 +254,14 @@
       taskSort.addEventListener('change', () => {
         if (taskSort.value === 'manual') return;
         orderedDocuments.sort((left, right) => {
-          const leftTask = left.task || {};
-          const rightTask = right.task || {};
+          const leftTask = taskDetails(left);
+          const rightTask = taskDetails(right);
           const leftValue = taskSort.value === 'id'
             ? leftTask.idReadable || left.fileName
-            : leftTask.description || leftTask.summary || left.fileName;
+            : leftTask.title;
           const rightValue = taskSort.value === 'id'
             ? rightTask.idReadable || right.fileName
-            : rightTask.description || rightTask.summary || right.fileName;
+            : rightTask.title;
           return collator.compare(leftValue, rightValue);
         });
         renderTaskList();

@@ -23,6 +23,11 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /item\.draggable = true/);
   assert.match(widget, /addEventListener\('drop'/);
   assert.match(widget, /let orderedDocuments = payload\.documents\.slice\(\)/);
+  assert.match(widget, /const taskDetails = exportDocument =>/);
+  assert.match(widget, /match\(\/\^#\\s\+\(\.\+\)\$\/m\)/);
+  assert.match(widget, /replace\(\/\^\.\*\\\.md\\s\+—\\s\+\//);
+  assert.match(widget, /typeof exportDocument\.originalTitle === 'string'/);
+  assert.match(widget, /: leftTask\.title/);
   assert.match(widget, /const orderedMarkdown/);
   assert.match(widget, /createZipBytes\(orderedDocuments\)/);
   assert.match(widget, /id="task-sort"/);
