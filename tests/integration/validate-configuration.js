@@ -32,7 +32,13 @@ const validateIntegrationConfiguration = (workflow, environment = process.env) =
   } else {
     errors.push('JIRA_CLOUD_BASE_URL is required.');
   }
-  requireValue(environment, 'JIRA_CLOUD_EMAIL', errors);
+  if (environment.JIRA_CLOUD_AUTH_MODE === 'scoped-token') {
+    if (!environment.JIRA_CLOUD_ID) {
+      errors.push('JIRA_CLOUD_ID is required when JIRA_CLOUD_AUTH_MODE is scoped-token.');
+    }
+  } else {
+    requireValue(environment, 'JIRA_CLOUD_EMAIL', errors);
+  }
   requireValue(environment, 'JIRA_CLOUD_API_TOKEN', errors);
   requireValue(environment, 'JIRA_CLOUD_PROJECT_KEY', errors);
   return errors;

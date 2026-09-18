@@ -33,6 +33,7 @@ const {
 } = require('./link-normalization');
 const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
+const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -252,7 +253,6 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
 
   const jiraEndpoint = ctx.settings.jiraEndpointUrl;
   const jiraProjectSlug = ctx.settings.jiraProjectSlug;
-  const jiraApiToken = ctx.settings.jiraApiToken;
 
   const syncMode = ctx.settings.syncMode || 'Disabled';
   const issueSyncMode = getFieldValueName(issue.fields['Jira Sync']) || 'Enabled';
@@ -283,8 +283,9 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
     return syncResult;
   }
 
-  if (!jiraEndpoint || !jiraProjectSlug || !jiraApiToken) {
-    log('[Jira Sync] Missing required settings (jiraEndpointUrl, jiraProjectSlug or jiraApiToken). Skipping issue: ' + issue.id);
+  const jiraConfigurationError = getJiraConfigurationError(ctx.settings);
+  if (jiraConfigurationError || !jiraProjectSlug) {
+    log('[Jira Sync] Missing required settings (' + (jiraConfigurationError || 'jiraProjectSlug') + '). Skipping issue: ' + issue.id);
     syncResult.errorMsg = 'configurações obrigatórias ausentes';
     return syncResult;
   }
@@ -305,7 +306,6 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
     return syncResult;
   }
 
-  const JIRA_URL = jiraEndpoint + '/rest/api/2';
   const JIRA_PROJECT_KEY = jiraProjectSlug;
 
   // --- TRIGGER SUMMARY ---
@@ -376,8 +376,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
   }
 
   // --- CONNECTION SETUP ---
-  const connection = new http.Connection(JIRA_URL, null, 2000);
-  connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
+  const connection = createJiraConnection(http, ctx.settings, 2000, '2');
   connection.addHeader('Content-Type', 'application/json');
 
   const youtrackVersionFieldName = (ctx.settings.youtrackVersionFieldName || '').trim();
@@ -584,9 +583,6 @@ const checkJiraStatus = (issue, ctx, collector) => {
   };
 
   const jiraKey       = issue.fields['Jira ID'] || null;
-  const jiraEndpoint  = ctx.settings.jiraEndpointUrl;
-  const jiraApiToken  = ctx.settings.jiraApiToken;
-
   if (!jiraKey) {
     log('[Jira Check] No Jira ID on issue ' + issue.id + '. Skipping.');
     result.skipped  = true;
@@ -594,7 +590,8 @@ const checkJiraStatus = (issue, ctx, collector) => {
     return result;
   }
 
-  if (!jiraEndpoint || !jiraApiToken) {
+  const jiraConfigurationError = getJiraConfigurationError(ctx.settings);
+  if (jiraConfigurationError) {
     log('[Jira Check] Missing required settings. Skipping issue: ' + issue.id);
     result.skipped  = true;
     result.errorMsg = 'configuracoes obrigatorias ausentes';
@@ -603,9 +600,7 @@ const checkJiraStatus = (issue, ctx, collector) => {
 
   result.jiraKey = jiraKey;
 
-  const JIRA_URL = jiraEndpoint + '/rest/api/3';
-  const connection = new http.Connection(JIRA_URL, null, 2000);
-  connection.addHeader('Authorization', 'Basic ' + jiraApiToken);
+  const connection = createJiraConnection(http, ctx.settings, 2000);
   connection.addHeader('Content-Type', 'application/json');
 
   // Request only the status field to keep the response lightweight.

@@ -67,10 +67,29 @@ Subtasks are evaluated independently.
 
 ### Global settings
 
-`jiraApiToken`, `jiraEndpointUrl`, `youtrackBaseUrl`, and `youtrackApiToken`
-configure the integration boundaries. `youtrackApiToken` is required only for
-manual Jira label synchronization. `verboseNotify` and the notification channel
-settings control output for manual syncs.
+`jiraAuthMode`, `jiraApiToken`, `jiraEndpointUrl`, `jiraCloudId`,
+`youtrackBaseUrl`, and `youtrackApiToken` configure the integration boundaries.
+`youtrackApiToken` is required only for manual Jira label synchronization.
+`verboseNotify` and the notification channel settings control output for manual
+syncs.
+
+### Jira authentication
+
+The default **Basic** mode preserves existing installations: `jiraApiToken`
+contains the Base64 representation of `email:api-token`, and requests go to
+`jiraEndpointUrl`. No existing setting needs to change.
+
+**Scoped token** mode is opt-in and intended for an Atlassian service account.
+Set `jiraAuthMode` to `Scoped token`, retain `jiraEndpointUrl` as the Jira site
+URL for generated browse links, set `jiraCloudId` to the value after `/s/` in
+the Atlassian Administration URL, and set `jiraApiToken` to the raw scoped API
+token. Requests then use `Bearer` authentication through
+`https://api.atlassian.com/ex/jira/<cloudId>/...`.
+
+Create the service-account token with only the required Jira scopes. This
+workflow normally needs `read:jira-work` and `write:jira-work`; project
+permissions still restrict what the service account can read or modify. Do not
+grant Jira administration merely for this integration.
 
 Notification channels are `Disabled`, `ntfy`, `Teams`, and `Slack`. Treat all
 webhook and topic URLs as secrets.
@@ -132,9 +151,19 @@ The container runner verifies both authenticated APIs, confirms access to the
 configured sandbox project, runs the repository suite, and uploads the local
 workflow package to the local YouTrack instance.
 
-The current workflow setting `jiraApiToken` expects the Base64 representation
-of `email:api-token` for its Basic Authorization header. The integration
-environment receives the email and raw API token separately so it can verify
-the Jira Cloud API safely; encode the value locally before setting
-`jiraApiToken` in YouTrack. Full setup, execution, cleanup, and troubleshooting
-instructions are in the [integration environment guide](../tests/integration/README.md#jira-migration).
+The integration environment defaults to service-account scoped-token
+authentication. Set `JIRA_CLOUD_ID` to the value after `/s/` in the Atlassian
+Administration URL and provide the raw API token. In the uploaded local
+YouTrack workflow, select `Scoped token`, set `jiraCloudId` to the same value,
+and paste the raw token in `jiraApiToken`.
+
+Follow the [Jira Cloud sandbox runbook](../docs/runbooks/jira-cloud-sandbox-setup.md)
+to create the sandbox project, service account, token, local profile, and
+initial `Dry-Run` workflow configuration.
+
+Basic authentication remains available for compatibility: set
+`JIRA_CLOUD_AUTH_MODE=basic`, configure `JIRA_CLOUD_EMAIL`, and encode
+`email:api-token` locally before setting `jiraApiToken` in YouTrack. Full setup,
+execution, cleanup, and troubleshooting instructions are in the
+[integration environment guide](../tests/integration/README.md#jira-migration).
+Set `INTEGRATION_PROFILE` to select `.env.<profile>`; it defaults to `local`.

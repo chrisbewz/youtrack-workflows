@@ -4,6 +4,27 @@ Each workflow has its own Docker Compose project, local YouTrack state, and
 test runner. The environments are designed for local development and CI. They
 never use repository `.npmrc` values and never send a package to production.
 
+## Profiles
+
+Integration configuration is selected with `INTEGRATION_PROFILE` and always
+uses `tests/integration/<workflow>/.env.<profile>`. The default profile is
+`local`, so existing commands use `.env.local` without extra configuration.
+
+```powershell
+# Default: tests/integration/task-export/.env.local
+mise run integration:task-export:up
+
+# Explicit profile: tests/integration/task-export/.env.corp
+$env:INTEGRATION_PROFILE = 'corp'
+mise run integration:task-export:init
+mise run integration:task-export:up
+```
+
+Use profiles such as `local`, `corp`, and `ci` to select different registry,
+proxy, port, or sandbox settings. All `.env.<profile>` files are ignored by
+Git. CI should create `.env.ci` from secret-store values at runtime rather than
+commit it. Profile names may contain only letters, numbers, and hyphens.
+
 ## Prerequisites
 
 - Docker Desktop configured for Linux containers.
@@ -33,7 +54,7 @@ RUNNER_NODE_IMAGE=registry.corp.example/library/node:22-alpine
 
 Keep the same pinned `YOUTRACK_IMAGE_TAG` in either case. Authenticate the
 Docker client with `docker login registry.corp.example`; never put registry
-credentials in `.env.local`, `mise.toml`, or a Compose file.
+credentials in `.env.<profile>`, `mise.toml`, or a Compose file.
 
 Configure the proxy at the Docker layer, not in this repository. In Docker
 Desktop, configure **Settings > Resources > Proxies** for image pulls and
@@ -49,8 +70,8 @@ wizard configuration across normal Compose restarts.
 
 ## General workflow
 
-From the repository root, create the ignored local file with mise, fill in the
-required values, then start YouTrack:
+From the repository root, create the ignored profile file with mise, fill in
+the required values, then start YouTrack:
 
 ```powershell
 mise run integration:<workflow>:init
@@ -61,7 +82,8 @@ mise run integration:<workflow>:logs
 On a first run, open `http://localhost:<YOUTRACK_HOST_PORT>` using the one-time
 wizard URL printed in the logs. Complete the YouTrack setup, set the base URL
 to the same host port, enter the local license, create a permanent token for
-the test administrator, and save it as `YOUTRACK_TEST_TOKEN` in `.env.local`.
+the test administrator, and save it as `YOUTRACK_TEST_TOKEN` in the selected
+`.env.<profile>` file.
 
 Run the selected environment after the wizard is complete:
 
@@ -103,6 +125,8 @@ place of `<workflow>`.
 The Jira Migration environment uses local YouTrack plus a dedicated Jira Cloud
 Free sandbox. Create a separate automation account and a project used only for
 these tests. Its credentials must never be a personal or production account.
+The [Jira Cloud sandbox runbook](../../docs/runbooks/jira-cloud-sandbox-setup.md)
+documents the full preparation sequence.
 
 ```powershell
 mise run integration:jira-migration:init
@@ -112,31 +136,42 @@ Set the YouTrack variables plus these Jira values:
 
 | Variable | Purpose |
 |---|---|
-| `JIRA_CLOUD_BASE_URL` | HTTPS URL of the `*.atlassian.net` sandbox. |
-| `JIRA_CLOUD_EMAIL` | Dedicated sandbox automation-account email. |
-| `JIRA_CLOUD_API_TOKEN` | Raw API token for the automation account. |
+| `JIRA_CLOUD_AUTH_MODE` | `scoped-token` (default) for a service account, or `basic` for the legacy compatibility path. |
+| `JIRA_CLOUD_BASE_URL` | HTTPS URL of the `*.atlassian.net` sandbox. It remains useful for the workflow's Jira browse links. |
+| `JIRA_CLOUD_ID` | Required for `scoped-token`; the value after `/s/` in the Atlassian Administration URL, not the organization ID. |
+| `JIRA_CLOUD_EMAIL` | Required only for `basic`; dedicated sandbox automation-account email. |
+| `JIRA_CLOUD_API_TOKEN` | Raw scoped service-account API token, or raw API token for `basic`. |
 | `JIRA_CLOUD_PROJECT_KEY` | Project the runner is allowed to verify. |
 
 The runner checks `/rest/api/3/myself` and the configured project before
-uploading. It prints only endpoint names and HTTP status codes, never token
-values or Authorization headers.
+uploading. In `scoped-token` mode it uses the Atlassian API Gateway and a
+Bearer token; in `basic` mode it uses the site URL and Basic authentication.
+It prints only endpoint names and HTTP status codes, never token values or
+Authorization headers.
 
-For the existing workflow setting `jiraApiToken`, encode the separate Jira
-values locally before pasting the result into YouTrack:
+For the recommended service-account configuration, create a scoped token with
+`read:jira-work` and `write:jira-work`, set `jiraAuthMode` to `Scoped token`,
+set `jiraEndpointUrl` to `JIRA_CLOUD_BASE_URL`, set `jiraCloudId` to
+`JIRA_CLOUD_ID`, and paste the raw `JIRA_CLOUD_API_TOKEN` as `jiraApiToken`.
+Do not add Jira administration privileges.
+
+For the legacy Basic compatibility mode, encode the separate Jira values
+locally before pasting the result into YouTrack:
 
 ```powershell
 $credential = "$env:JIRA_CLOUD_EMAIL`:$env:JIRA_CLOUD_API_TOKEN"
 [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($credential))
 ```
 
-Set `jiraEndpointUrl` to `JIRA_CLOUD_BASE_URL`, `jiraProjectSlug` to
-`JIRA_CLOUD_PROJECT_KEY`, and `syncMode` to `Dry-Run` while initially proving
-the connection. Do not enable notifications in the sandbox configuration.
+Set `jiraProjectSlug` to `JIRA_CLOUD_PROJECT_KEY` and `syncMode` to `Dry-Run`
+while initially proving the connection. Do not enable notifications in the
+sandbox configuration.
 
 ## CI and troubleshooting
 
 CI uses the same Compose commands and injects values from its secret store; it
-must not create `.env.local` in an artifact or print the environment. Use a
+must create `.env.ci` only for the job, must not publish it as an artifact, and
+must not print the environment. Use a
 dedicated Jira project and delete only data marked as integration-test data.
 
 - **The runner times out waiting for YouTrack:** inspect `docker compose ...

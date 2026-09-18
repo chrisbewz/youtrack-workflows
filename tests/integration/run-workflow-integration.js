@@ -10,21 +10,26 @@ const buildYouTrackRequest = (baseUrl, token) => ({
   headers: { Authorization: 'Bearer ' + token }
 });
 
+const isScopedJiraCloudAuth = environment => environment.JIRA_CLOUD_AUTH_MODE === 'scoped-token';
+
+const getJiraCloudApiBaseUrl = environment => isScopedJiraCloudAuth(environment)
+  ? 'https://api.atlassian.com/ex/jira/' + encodeURIComponent(environment.JIRA_CLOUD_ID) + '/rest/api/3/'
+  : new URL('/rest/api/3/', environment.JIRA_CLOUD_BASE_URL).toString();
+
+const getJiraCloudAuthorization = environment => isScopedJiraCloudAuth(environment)
+  ? 'Bearer ' + environment.JIRA_CLOUD_API_TOKEN
+  : 'Basic ' + Buffer.from(
+    environment.JIRA_CLOUD_EMAIL + ':' + environment.JIRA_CLOUD_API_TOKEN
+  ).toString('base64');
+
 const buildJiraCloudRequest = environment => ({
-  url: new URL('/rest/api/3/myself', environment.JIRA_CLOUD_BASE_URL).toString(),
-  headers: {
-    Authorization: 'Basic ' + Buffer.from(
-      environment.JIRA_CLOUD_EMAIL + ':' + environment.JIRA_CLOUD_API_TOKEN
-    ).toString('base64')
-  }
+  url: new URL('myself', getJiraCloudApiBaseUrl(environment)).toString(),
+  headers: { Authorization: getJiraCloudAuthorization(environment) }
 });
 
 const buildJiraProjectRequest = environment => ({
-  url: new URL(
-    '/rest/api/3/project/' + encodeURIComponent(environment.JIRA_CLOUD_PROJECT_KEY),
-    environment.JIRA_CLOUD_BASE_URL
-  ).toString(),
-  headers: buildJiraCloudRequest(environment).headers
+  url: new URL('project/' + encodeURIComponent(environment.JIRA_CLOUD_PROJECT_KEY), getJiraCloudApiBaseUrl(environment)).toString(),
+  headers: { Authorization: getJiraCloudAuthorization(environment) }
 });
 
 const isSuccessfulResponse = response => response.ok === true;
@@ -102,5 +107,7 @@ module.exports = {
   buildJiraCloudRequest,
   buildJiraProjectRequest,
   buildYouTrackRequest,
+  getJiraCloudApiBaseUrl,
+  getJiraCloudAuthorization,
   isSuccessfulResponse
 };
