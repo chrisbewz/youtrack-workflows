@@ -17,7 +17,12 @@ exports.httpHandler = {
         const markdown = composeMarkdownDocuments(collection.issues.map(issue =>
           renderTaskMarkdown({
             summary: issue.summary,
-            description: issue.description
+            description: issue.description,
+            fields: issue.fields,
+            tags: issue.tags
+          }, {
+            includeFields: ctx.settings.includeFields,
+            includeTags: ctx.settings.includeTags
           })
         ));
 

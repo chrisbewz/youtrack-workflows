@@ -42,3 +42,33 @@ test('rejects issues without a usable title', () => {
     /summary must be a non-empty string/
   );
 });
+
+test('renders optional fields and tags only when requested', () => {
+  const markdown = renderTaskMarkdown({
+    summary: 'Task com metadados',
+    description: 'Descrição',
+    fields: {
+      State: { name: 'In Progress' },
+      Priority: { name: 'Critical' },
+      Empty: null
+    },
+    tags: [{ name: 'mexico' }, { name: 'export' }]
+  }, {
+    includeFields: true,
+    includeTags: true
+  });
+
+  assert.equal(
+    markdown,
+    '# Task com metadados\n\n' +
+    '## Descrição\n\n' +
+    'Descrição\n\n' +
+    '## Campos\n\n' +
+    '| Campo | Valor |\n' +
+    '| --- | --- |\n' +
+    '| Priority | Critical |\n' +
+    '| State | In Progress |\n\n' +
+    '## Tags\n\n' +
+    '\x60mexico\x60, \x60export\x60\n'
+  );
+});
