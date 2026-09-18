@@ -39,3 +39,22 @@ test('renders only relations between exported issues', () => {
     String.fromCharCode(96).repeat(3) + '\n'
   );
 });
+
+test('collapses localized parent and subtask link aliases into one parent-to-child edge', () => {
+  const parent = { idReadable: 'E3-374', summary: 'Parent', links: {} };
+  const child = { idReadable: 'E3-363', summary: 'Child', links: {} };
+  parent.links = {
+    'parent for': { forEach: callback => callback(child) },
+    'progenitor para': { forEach: callback => callback(child) }
+  };
+  child.links = {
+    'subtask of': { forEach: callback => callback(parent) },
+    'subtarefa de': { forEach: callback => callback(parent) },
+    subtask: { forEach: callback => callback(parent) }
+  };
+
+  const diagram = renderRelationDiagram([parent, child]);
+
+  assert.equal((diagram.match(/-->\|subtask\|/g) || []).length, 1);
+  assert.match(diagram, /E3_374 -->\|subtask\| E3_363/);
+});

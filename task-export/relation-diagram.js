@@ -7,9 +7,21 @@ const mermaidLabel = issue => String(issueIdentity(issue) + ' — ' + (issue.sum
   .replace(/"/g, '\\\\"')
   .replace(/\r?\n/g, ' ');
 
-const relationLabel = name => {
-  if (name === 'parent for' || name === 'subtask of') return 'subtask';
-  return name;
+const normalizedRelationName = name => String(name || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim();
+
+const normalizeRelation = (name, source, target) => {
+  const normalizedName = normalizedRelationName(name);
+  if (normalizedName === 'parent for' || normalizedName === 'progenitor para') {
+    return { label: 'subtask', source, target };
+  }
+  if (normalizedName === 'subtask of' || normalizedName === 'subtarefa de' || normalizedName === 'subtask') {
+    return { label: 'subtask', source: target, target: source };
+  }
+  return { label: name, source, target };
 };
 
 const renderRelationDiagram = issues => {
@@ -25,20 +37,16 @@ const renderRelationDiagram = issues => {
       const targets = links[name];
       if (!targets || typeof targets.forEach !== 'function') return;
       targets.forEach(target => {
-        const targetIdentity = issueIdentity(target);
-        if (!exported.has(targetIdentity)) return;
+        if (!exported.has(issueIdentity(target))) return;
+        const relation = normalizeRelation(name, source, target);
         const key = [
-          issueIdentity(source),
-          relationLabel(name),
-          targetIdentity
+          issueIdentity(relation.source),
+          relation.label,
+          issueIdentity(relation.target)
         ].join('|');
         if (seenEdges.has(key)) return;
         seenEdges.add(key);
-        edges.push({
-          label: relationLabel(name),
-          source,
-          target
-        });
+        edges.push(relation);
       });
     });
   });
