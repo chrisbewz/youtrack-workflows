@@ -6,9 +6,28 @@ const { renderRelationDiagram } = require('./relation-diagram');
 
 const isEnabled = value => value === true || value === 'true';
 
+const OPTION_KEYS = [
+  'includeSubtasks',
+  'includeFields',
+  'includeTags',
+  'includeTaskRelationDiagram',
+  'separateFilesForMultipleTasks'
+];
+
+const exportOptions = ctx => OPTION_KEYS.reduce((options, key) => {
+  const requestValue = ctx.request && typeof ctx.request.getParameter === 'function'
+    ? ctx.request.getParameter(key)
+    : null;
+  options[key] = requestValue === 'true' || requestValue === 'false'
+    ? isEnabled(requestValue)
+    : isEnabled(ctx.settings[key]);
+  return options;
+}, {});
+
 const buildExportPayload = ctx => {
+  const options = exportOptions(ctx);
   const collection = collectIssues(ctx.issue, {
-    includeSubtasks: isEnabled(ctx.settings.includeSubtasks)
+    includeSubtasks: options.includeSubtasks
   });
   const documents = collection.issues.map(issue => ({
     task: {
@@ -24,12 +43,12 @@ const buildExportPayload = ctx => {
       fields: issue.fields,
       tags: issue.tags
     }, {
-      includeFields: isEnabled(ctx.settings.includeFields),
-      includeTags: isEnabled(ctx.settings.includeTags)
+      includeFields: options.includeFields,
+      includeTags: options.includeTags
     })
   }));
   let trailingMarkdown = '';
-  if (isEnabled(ctx.settings.includeTaskRelationDiagram)) {
+  if (options.includeTaskRelationDiagram) {
     const diagram = renderRelationDiagram(collection.issues);
     if (diagram) trailingMarkdown = '\n' + diagram;
   }
@@ -44,7 +63,12 @@ const buildExportPayload = ctx => {
     trailingMarkdown,
     documents,
     warnings: collection.warnings,
-    separateFilesForMultipleTasks: isEnabled(ctx.settings.separateFilesForMultipleTasks)
+    separateFilesForMultipleTasks: options.separateFilesForMultipleTasks,
+    projectOptions: OPTION_KEYS.reduce((projectOptions, key) => {
+      projectOptions[key] = isEnabled(ctx.settings[key]);
+      return projectOptions;
+    }, {}),
+    options
   };
 };
 

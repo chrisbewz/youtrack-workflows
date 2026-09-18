@@ -54,3 +54,28 @@ test('JSON export endpoint returns documents and export options for the widget',
   assert.equal(response.value.separateFilesForMultipleTasks, true);
   assert.equal(response.value.trailingMarkdown, '');
 });
+
+test('JSON export endpoint applies request-only export option overrides', () => {
+  const response = { json: value => { response.value = value; } };
+  const endpoint = httpHandler.endpoints.find(item => item.path === 'data');
+
+  endpoint.handle({
+    issue: {
+      id: '3-374', idReadable: 'E3-374', summary: 'Root task', description: 'Root description',
+      fields: { Priority: { name: 'Critical' } }, tags: [], links: {}
+    },
+    settings: {
+      includeSubtasks: false,
+      includeFields: true,
+      includeTags: false,
+      includeTaskRelationDiagram: false,
+      separateFilesForMultipleTasks: false
+    },
+    request: { getParameter: name => name === 'includeFields' ? 'false' : null },
+    response
+  });
+
+  assert.equal(response.value.projectOptions.includeFields, true);
+  assert.equal(response.value.options.includeFields, false);
+  assert.doesNotMatch(response.value.markdown, /## Campos/);
+});
