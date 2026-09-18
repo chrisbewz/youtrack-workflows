@@ -68,6 +68,7 @@ test('preserves Markdown links as clickable PDF annotations', () => {
   assert.match(text, /the documentation/);
   assert.match(text, /\/Subtype \/Link/);
   assert.match(text, /\/URI \(https:\/\/example\.com\/docs\)/);
+  assert.doesNotMatch(text, /0\.5 w/);
 });
 
 test('creates a ZIP archive containing the requested Markdown files', () => {

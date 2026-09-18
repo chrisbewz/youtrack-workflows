@@ -13,7 +13,8 @@ const buildExportPayload = ctx => {
   const documents = collection.issues.map(issue => ({
     task: {
       idReadable: issue.idReadable,
-      summary: issue.summary
+      summary: issue.summary,
+      description: issue.description == null ? '' : String(issue.description)
     },
     fileName: buildMarkdownFilename(issue),
     markdown: renderTaskMarkdown({
@@ -26,11 +27,12 @@ const buildExportPayload = ctx => {
       includeTags: isEnabled(ctx.settings.includeTags)
     })
   }));
-  let markdown = composeMarkdownDocuments(documents.map(document => document.markdown));
+  let trailingMarkdown = '';
   if (isEnabled(ctx.settings.includeTaskRelationDiagram)) {
     const diagram = renderRelationDiagram(collection.issues);
-    if (diagram) markdown += '\n' + diagram;
+    if (diagram) trailingMarkdown = '\n' + diagram;
   }
+  const markdown = composeMarkdownDocuments(documents.map(document => document.markdown)) + trailingMarkdown;
   return {
     issue: {
       id: ctx.issue.id,
@@ -38,6 +40,7 @@ const buildExportPayload = ctx => {
       summary: ctx.issue.summary
     },
     markdown,
+    trailingMarkdown,
     documents,
     warnings: collection.warnings,
     separateFilesForMultipleTasks: isEnabled(ctx.settings.separateFilesForMultipleTasks)

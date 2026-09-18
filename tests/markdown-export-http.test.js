@@ -46,4 +46,5 @@ test('JSON export endpoint returns documents and export options for the widget',
   assert.deepEqual(response.value.documents[1].task, { idReadable: 'E3-375', summary: 'Child task' });
   assert.equal(response.value.documents[1].markdown, '# Child task\n\n## Descrição\n\nChild description\n');
   assert.equal(response.value.separateFilesForMultipleTasks, true);
+  assert.equal(response.value.trailingMarkdown, '');
 });

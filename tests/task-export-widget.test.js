@@ -19,10 +19,15 @@ test('widget calls the data endpoint through its HTTP handler', () => {
   assert.match(widget, /id="export-menu"/);
   assert.match(widget, /Copy Markdown/);
   assert.match(widget, /navigator\.clipboard\.writeText/);
-  assert.match(widget, /const task = exportDocument\.task \|\| \{\}/);
-  assert.match(widget, /: exportDocument\.fileName/);
-  assert.match(widget, /payload\.documents\.forEach\(exportDocument =>/);
-  assert.doesNotMatch(widget, /payload\.documents\.forEach\(document =>/);
+  assert.match(widget, /className = 'task-item'/);
+  assert.match(widget, /item\.draggable = true/);
+  assert.match(widget, /addEventListener\('drop'/);
+  assert.match(widget, /let orderedDocuments = payload\.documents\.slice\(\)/);
+  assert.match(widget, /const orderedMarkdown/);
+  assert.match(widget, /createZipBytes\(orderedDocuments\)/);
+  assert.match(widget, /id="task-sort"/);
+  assert.match(widget, /new Intl\.Collator\(locale, \{ numeric: true/);
+  assert.match(widget, /taskList\.focus\(\)/);
 });
 
 test('widget uses a neutral label and an export icon in the issue menu', () => {

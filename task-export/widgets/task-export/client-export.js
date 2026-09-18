@@ -226,7 +226,6 @@ const createPdfBytes = markdown => {
           contentParts.push('/' + segment.font + ' ' + block.size + ' Tf (');
           contentParts.push(escapePdfString(toWinAnsi(segment.text)));
           contentParts.push(') Tj ');
-          if (segment.href) contentParts.push('0.5 w ' + x + ' ' + (y - 1) + ' m ' + (x + width) + ' ' + (y - 1) + ' l S ');
           x += width;
         });
         contentParts.push('ET\n');

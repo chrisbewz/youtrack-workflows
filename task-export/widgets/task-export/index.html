@@ -16,7 +16,13 @@
     }
     #task-preview { margin: 0 0 16px; }
     #task-preview h2 { margin: 0 0 8px; font-size: 14px; }
-    #task-list { max-height: 140px; margin: 0; padding-left: 20px; overflow: auto; }
+    #task-list-hint { margin: 0 0 8px; color: #57606a; font-size: 12px; }
+    #task-sort { min-height: 32px; margin: 0 0 8px; border: 1px solid #8c959f; border-radius: 4px; background: #ffffff; color: #1f2328; padding: 4px 8px; font: inherit; }
+    #task-list { max-height: min(50vh, 420px); margin: 0; padding: 0; overflow: auto; list-style: none; }
+    .task-item { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 4px 0; padding: 6px 8px; border: 1px solid #d0d7de; border-radius: 4px; background: #f6f8fa; cursor: grab; }
+    .task-item.dragging { opacity: .5; }
+    .task-item:focus-visible { outline: 2px solid #1868db; outline-offset: 2px; }
+    .drag-handle { color: #57606a; font-size: 16px; line-height: 1; }
     #export-menu { display: inline-block; }
     #export-menu summary { min-height: 32px; border: 1px solid #1868db; border-radius: 4px; background: #1868db; color: #ffffff; padding: 6px 12px; font-weight: 500; cursor: pointer; }
     #task-export-actions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
@@ -44,6 +50,9 @@
     @media (prefers-color-scheme: dark) {
       body { background: #1f2023; color: #f0f2f5; }
       #task-export-actions button { border-color: #6e7681; background: #2d3036; color: #f0f2f5; }
+      #task-list-hint, .drag-handle { color: #a7b0bb; }
+      #task-sort { border-color: #6e7681; background: #2d3036; color: #f0f2f5; }
+      .task-item { border-color: #6e7681; background: #2d3036; }
       #task-export-actions button.primary { border-color: #2f81f7; background: #2f81f7; color: #ffffff; }
       #task-export-actions button:focus-visible { outline-color: #58a6ff; }
       .warning { color: #e3b341; }
@@ -54,7 +63,14 @@
   <p id="status" role="status" aria-live="polite">Loading export…</p>
   <section id="task-preview" hidden>
     <h2 id="task-list-heading">Tasks to export</h2>
-    <ul id="task-list"></ul>
+    <p id="task-list-hint">Drag tasks to change the export order.</p>
+    <label id="task-sort-label" for="task-sort">Quick order</label>
+    <select id="task-sort">
+      <option value="manual">Manual order</option>
+      <option value="description">Task description (natural)</option>
+      <option value="id">Task ID (natural)</option>
+    </select>
+    <ol id="task-list" tabindex="0"></ol>
   </section>
   <details id="export-menu">
     <summary id="export-trigger">Export</summary>
@@ -72,6 +88,7 @@
     const zipButton = document.getElementById('zip');
     const taskPreview = document.getElementById('task-preview');
     const taskList = document.getElementById('task-list');
+    const taskSort = document.getElementById('task-sort');
     const exportMenu = document.getElementById('export-menu');
     const messages = {
       en: {
@@ -83,6 +100,13 @@
         copied: 'Markdown copied to the clipboard.',
         export: 'Export',
         taskList: 'Tasks to export',
+        reorderHint: 'Drag tasks to change the export order.',
+        reordered: ' Export order updated.',
+        quickOrder: 'Quick order',
+        manualOrder: 'Manual order',
+        descriptionOrder: 'Task description (natural)',
+        idOrder: 'Task ID (natural)',
+        sorted: ' Tasks sorted.',
         ready: count => count === 1 ? '1 task ready to export.' : count + ' tasks ready to export.',
         duplicateWarning: ' Duplicate references were skipped.',
         error: 'Unable to prepare the export. Try again or contact an administrator.',
@@ -97,6 +121,13 @@
         copied: 'Markdown copiado para a área de transferência.',
         export: 'Exportar',
         taskList: 'Tarefas para exportar',
+        reorderHint: 'Arraste as tarefas para alterar a ordem de exportação.',
+        reordered: ' Ordem de exportação atualizada.',
+        quickOrder: 'Ordenação rápida',
+        manualOrder: 'Ordem manual',
+        descriptionOrder: 'Descrição da tarefa (natural)',
+        idOrder: 'ID da tarefa (natural)',
+        sorted: ' Tarefas ordenadas.',
         ready: count => count === 1 ? '1 tarefa pronta para exportação.' : count + ' tarefas prontas para exportação.',
         duplicateWarning: ' Referências duplicadas foram ignoradas.',
         error: 'Não foi possível preparar a exportação. Tente novamente ou contate um administrador.',
@@ -162,39 +193,94 @@
       document.getElementById('clipboard').textContent = text.clipboard;
       document.getElementById('export-trigger').textContent = text.export;
       document.getElementById('task-list-heading').textContent = text.taskList;
+      document.getElementById('task-list-hint').textContent = text.reorderHint;
+      document.getElementById('task-sort-label').textContent = text.quickOrder;
+      taskSort.options.manual.textContent = text.manualOrder;
+      taskSort.options.description.textContent = text.descriptionOrder;
+      taskSort.options.id.textContent = text.idOrder;
 
       const payload = await host.fetchApp('markdown-export-http/data', { scope: true });
-      status.textContent = text.ready(payload.documents.length);
+      let orderedDocuments = payload.documents.slice();
+      const orderedMarkdown = () => orderedDocuments.map(exportDocument => exportDocument.markdown).join('\n---\n\n') +
+        (payload.trailingMarkdown || '');
+      const renderTaskList = () => {
+        taskList.replaceChildren();
+        orderedDocuments.forEach(exportDocument => {
+          const task = exportDocument.task || {};
+          const item = document.createElement('li');
+          item.className = 'task-item';
+          item.draggable = true;
+          item.tabIndex = 0;
+          item.innerHTML = '<span class="drag-handle" aria-hidden="true">⠿</span>';
+          item.append(document.createTextNode(task.idReadable && task.summary
+            ? task.idReadable + ' — ' + task.summary
+            : exportDocument.fileName));
+          item.addEventListener('dragstart', event => {
+            item.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', exportDocument.fileName);
+          });
+          item.addEventListener('dragend', () => item.classList.remove('dragging'));
+          item.addEventListener('dragover', event => event.preventDefault());
+          item.addEventListener('drop', event => {
+            event.preventDefault();
+            const sourceFileName = event.dataTransfer.getData('text/plain');
+            const sourceIndex = orderedDocuments.findIndex(candidate => candidate.fileName === sourceFileName);
+            const targetIndex = orderedDocuments.indexOf(exportDocument);
+            if (sourceIndex < 0 || sourceIndex === targetIndex) return;
+            const [movedDocument] = orderedDocuments.splice(sourceIndex, 1);
+            orderedDocuments.splice(targetIndex, 0, movedDocument);
+            taskSort.value = 'manual';
+            renderTaskList();
+            status.classList.remove('warning');
+            status.textContent = text.ready(orderedDocuments.length) + text.reordered;
+          });
+          taskList.append(item);
+        });
+      };
+      const collator = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
+      taskSort.addEventListener('change', () => {
+        if (taskSort.value === 'manual') return;
+        orderedDocuments.sort((left, right) => {
+          const leftTask = left.task || {};
+          const rightTask = right.task || {};
+          const leftValue = taskSort.value === 'id'
+            ? leftTask.idReadable || left.fileName
+            : leftTask.description || leftTask.summary || left.fileName;
+          const rightValue = taskSort.value === 'id'
+            ? rightTask.idReadable || right.fileName
+            : rightTask.description || rightTask.summary || right.fileName;
+          return collator.compare(leftValue, rightValue);
+        });
+        renderTaskList();
+        status.classList.remove('warning');
+        status.textContent = text.ready(orderedDocuments.length) + text.sorted;
+      });
+      status.textContent = text.ready(orderedDocuments.length);
       if (payload.warnings.length) {
         status.classList.add('warning');
         status.textContent += text.duplicateWarning;
       }
-      payload.documents.forEach(exportDocument => {
-        const task = exportDocument.task || {};
-        const item = document.createElement('li');
-        item.textContent = task.idReadable && task.summary
-          ? task.idReadable + ' — ' + task.summary
-          : exportDocument.fileName;
-        taskList.append(item);
-      });
+      renderTaskList();
       taskPreview.hidden = false;
+      taskList.focus();
       actions.hidden = false;
 
       document.getElementById('markdown').onclick = () => withBusyButton(
         document.getElementById('markdown'),
-        () => download(payload.documents.length === 1 ? payload.documents[0].fileName : 'tasks.md',
-          'text/markdown; charset=utf-8', payload.markdown)
+        () => download(orderedDocuments.length === 1 ? orderedDocuments[0].fileName : 'tasks.md',
+          'text/markdown; charset=utf-8', orderedMarkdown())
       );
       document.getElementById('pdf').onclick = () => withBusyButton(
         document.getElementById('pdf'),
         () => download(payload.issue.idReadable + '-tasks.pdf', 'application/pdf',
-          TaskExportClient.createPdfBytes(payload.markdown))
+          TaskExportClient.createPdfBytes(orderedMarkdown()))
       );
       document.getElementById('clipboard').onclick = async () => {
         const button = document.getElementById('clipboard');
         button.disabled = true;
         try {
-          await copyMarkdown(payload.markdown);
+          await copyMarkdown(orderedMarkdown());
           status.classList.remove('warning');
           status.textContent = text.copied;
           exportMenu.open = false;
@@ -206,12 +292,12 @@
           button.disabled = false;
         }
       };
-      if (payload.separateFilesForMultipleTasks && payload.documents.length > 1) {
+      if (payload.separateFilesForMultipleTasks && orderedDocuments.length > 1) {
         zipButton.hidden = false;
         zipButton.onclick = () => withBusyButton(
           zipButton,
           () => download(payload.issue.idReadable + '-tasks.zip', 'application/zip',
-            TaskExportClient.createZipBytes(payload.documents))
+            TaskExportClient.createZipBytes(orderedDocuments))
         );
       }
     };
