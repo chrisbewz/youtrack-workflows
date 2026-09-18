@@ -63,5 +63,10 @@ local YouTrack Server and use only local secrets or CI secrets. The Jira
 Synchronization Manager environment connects to a dedicated Jira Cloud Free
 sandbox; it does not run Jira Data Center locally.
 
+Before starting that environment, prepare the Jira sandbox and its service
+account with the [Jira Cloud sandbox runbook](docs/runbooks/jira-cloud-sandbox-setup.md).
+
 [`mise.toml`](mise.toml) provides the supported local commands. Run `mise
 tasks` to list them, then start with `mise run integration:task-export:init`.
+Set `INTEGRATION_PROFILE` to select an ignored `.env.<profile>` file; it
+defaults to `local`.
