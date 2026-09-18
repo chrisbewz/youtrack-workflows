@@ -11,7 +11,7 @@
       "description": "Baixa a issue atual em Markdown, PDF ou ZIP.",
       "extensionPoint": "ISSUE_OPTIONS_MENU_ITEM",
       "indexPath": "task-export/index.html",
-      "permissions": ["ISSUE_READ"]
+      "permissions": ["READ_ISSUE"]
     }
   ],
   "vendor": {
