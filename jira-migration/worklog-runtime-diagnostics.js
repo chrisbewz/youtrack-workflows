@@ -26,6 +26,9 @@ const describeMethodIdentity = (item, methodName) => {
 
 const describeWorkItem = (item, source) => {
   const duration = safeRead(item, 'duration');
+  const author = safeRead(item, 'author');
+  const creator = safeRead(item, 'creator');
+  const type = safeRead(item, 'type');
   const keys = item && typeof item === 'object'
     ? Object.keys(item).slice(0, 20).join(',') || '(none)'
     : '(not-an-object)';
@@ -35,8 +38,13 @@ const describeWorkItem = (item, source) => {
     ' entityId=' + summarizeScalar(safeRead(item, 'entityId')) +
     ' $$type=' + summarizeScalar(safeRead(item, '$$type')) +
     ' date=' + summarizeScalar(safeRead(item, 'date')) +
+    ' created=' + summarizeScalar(safeRead(item, 'created')) +
+    ' updated=' + summarizeScalar(safeRead(item, 'updated')) +
     ' durationType=' + (duration === null ? 'null' : typeof duration) +
     ' durationMinutes=' + summarizeScalar(safeRead(duration, 'minutes')) +
+    ' authorLogin=' + summarizeScalar(safeRead(author, 'login')) +
+    ' creatorLogin=' + summarizeScalar(safeRead(creator, 'login')) +
+    ' typeName=' + summarizeScalar(safeRead(type, 'name')) +
     ' textPresent=' + (safeRead(item, 'text') !== undefined) +
     ' descriptionPresent=' + (safeRead(item, 'description') !== undefined) +
     ' toStringId=' + describeMethodIdentity(item, 'toString') +
