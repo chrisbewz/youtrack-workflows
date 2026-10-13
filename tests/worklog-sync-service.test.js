@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { syncWorklogs } = require('../jira-migration/worklog-sync-service');
+const { describeError } = require('../jira-migration/error-message');
 
 const workItem = (id, overrides = {}) => ({
   id,
@@ -25,6 +26,13 @@ const fakeDependencies = overrides => {
     ...overrides
   };
 };
+
+test('YOU-40 preserves exceptions without a JavaScript message for workflow diagnostics', () => {
+  const runtimeException = { toString: () => 'java.net.SocketTimeoutException: Read timed out' };
+
+  assert.equal(describeError(runtimeException), 'java.net.SocketTimeoutException: Read timed out');
+  assert.equal(describeError(new Error('Forbidden')), 'Forbidden');
+});
 
 test('YOU-40 exports YouTrack work items with duration, date, description and source marker', () => {
   const dependencies = fakeDependencies();

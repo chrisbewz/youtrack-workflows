@@ -35,6 +35,7 @@ const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
 const { syncWorklogs } = require('./worklog-sync-service');
 const { getWorklogSyncDecision } = require('./worklog-sync-decision');
+const { describeError } = require('./error-message');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -262,8 +263,9 @@ const syncOnlyWorklogs = (issue, ctx, collector) => {
   try {
     return syncWorklogs(issue, decision.jiraKey, createWorklogDependencies(connection), log);
   } catch (error) {
-    log('[Jira Sync] Worklog synchronization failed: ' + error.message);
-    return { failed: true, errorMsg: error.message };
+    const errorMsg = describeError(error);
+    log('[Jira Sync] Worklog synchronization failed: ' + errorMsg);
+    return { failed: true, errorMsg };
   }
 };
 
@@ -603,7 +605,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
       try {
         syncWorklogs(issue, resolvedJiraKey, createWorklogDependencies(connection), log);
       } catch (error) {
-        log('[Jira Sync] Worklog synchronization skipped without reverting issue sync: ' + error.message);
+        log('[Jira Sync] Worklog synchronization skipped without reverting issue sync: ' + describeError(error));
       }
     }
   }

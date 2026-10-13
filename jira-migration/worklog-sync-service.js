@@ -1,4 +1,5 @@
 const WORK_ITEM_PROPERTY_KEY = 'youtrack-work-item';
+const { describeError } = require('./error-message');
 
 const toArray = collection => {
   const values = [];
@@ -63,7 +64,7 @@ const syncWorklogs = (issue, jiraKey, dependencies, log) => {
       result.exported += 1;
     } catch (error) {
       result.failed += 1;
-      log('[Jira Sync] Work item ' + workItemId + ' failed to export: ' + error.message);
+      log('[Jira Sync] Work item ' + workItemId + ' failed to export: ' + describeError(error));
     }
   });
 
