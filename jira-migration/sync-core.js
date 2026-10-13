@@ -34,6 +34,7 @@ const {
 const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
 const { syncWorklogs } = require('./worklog-sync-service');
+const { getWorklogSyncDecision } = require('./worklog-sync-decision');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -225,6 +226,46 @@ const createWorklogDependencies = connection => ({
     }
   }
 });
+
+const countWorkItems = issue => {
+  let count = 0;
+  if (issue.workItems && typeof issue.workItems.forEach === 'function') {
+    issue.workItems.forEach(() => { count += 1; });
+  }
+  return count;
+};
+
+const syncOnlyWorklogs = (issue, ctx, collector) => {
+  const log = message => {
+    console.log(message);
+    if (collector) collector.push(message);
+  };
+  const decision = getWorklogSyncDecision(
+    issue,
+    ctx.settings,
+    evaluateSyncDecision(issue, ctx.settings)
+  );
+
+  if (!decision.canSync) {
+    log('[Jira Sync] Worklog synchronization skipped: ' + decision.reason + '.');
+    return { skipped: true, reason: decision.reason };
+  }
+  if (decision.isDryRun) {
+    const count = countWorkItems(issue);
+    log('[Jira Sync][DRY-RUN] Would synchronize up to ' + count + ' YouTrack worklogs.');
+    return { dryRun: true, planned: count };
+  }
+
+  const connection = new http.Connection(ctx.settings.jiraEndpointUrl + '/rest/api/2', null, 2000);
+  connection.addHeader('Authorization', 'Basic ' + ctx.settings.jiraApiToken);
+  connection.addHeader('Content-Type', 'application/json');
+  try {
+    return syncWorklogs(issue, decision.jiraKey, createWorklogDependencies(connection), log);
+  } catch (error) {
+    log('[Jira Sync] Worklog synchronization failed: ' + error.message);
+    return { failed: true, errorMsg: error.message };
+  }
+};
 
 const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
   const payload = {
@@ -966,4 +1007,4 @@ const applyJiraMentionMapping = (src, settings) => {
   return text;
 };
 
-module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };
+module.exports = { performSync, syncOnlyWorklogs, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };

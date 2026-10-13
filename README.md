@@ -250,6 +250,7 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 |---|---|---|---|
 | `jira-migration.js` | `onChange` | Any mapped field changes on a reported issue | Real-time sync to Jira |
 | `jira-migration-action.js` | `action` | "Sync to Jira" button | Manual or forced re-sync |
+| `jira-worklog-sync-action.js` | `action` | "Sync Jira Worklogs" button | Export only YouTrack work items to Jira worklogs |
 | `jira-migration-check-action.js` | `action` | "Check Jira Status" button | Fetch Jira status and update `Jira State` |
 | `jira-link-sync-action.js` | `action` | "Sync Jira Links" button | Reconcile mapped links for the issue and immediate children |
 | `jira-label-sync-action.js` | `action` | "Sync Jira Labels" button | Add Jira labels as YouTrack tags, creating missing tags |
@@ -287,6 +288,8 @@ This first iteration does not delete Jira attachments when a YouTrack attachment
 Worklog synchronization is disabled by default. Set the project-level `worklogSyncMode` to `Enabled` to export each YouTrack work item as a Jira worklog. The work item's duration, assigned date, and description map to Jira's `timeSpentSeconds`, `started`, and `comment` fields. Its YouTrack ID, author login, and work-item type are kept in a Jira worklog property named `youtrack-work-item`.
 
 Before creating worklogs, the workflow reads the Jira worklogs (including properties) and skips any whose source work-item ID was exported previously. A failed worklog is logged and does not revert the issue synchronization or prevent the remaining worklogs from being attempted. Jira records the API-token user as the worklog author; the YouTrack author is retained as metadata because the Jira API does not accept an author override for this operation.
+
+Use the **Sync Jira Worklogs** action when you want to export time entries without synchronizing any other issue data. The action is available only for reported Jira-linked issues when both `syncMode` and `worklogSyncMode` are enabled. It uses the same duplicate detection and honors `Dry-Run`.
 
 This is intentionally one-way and additive: editing or removing a YouTrack work item triggers a reconciliation pass but does not alter or delete the corresponding Jira worklog. This prevents accidental deletion of time entries; updates and deletions can be added later with explicit Jira worklog-ID mapping and permissions.
 
