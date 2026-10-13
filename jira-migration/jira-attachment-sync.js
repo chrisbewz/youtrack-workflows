@@ -3,6 +3,7 @@ const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const { getFieldValueName } = require('./sync-decisions');
 const { isAttachmentSyncEligible, buildUploadPlan } = require('./attachment-sync-service');
+const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
 
 // YouTrack provides IssueAttachment.content as an InputStream and supports it
 // directly in multipart parts:
@@ -11,8 +12,7 @@ const { isAttachmentSyncEligible, buildUploadPlan } = require('./attachment-sync
 // Jira requires a multipart part named "file" and X-Atlassian-Token: no-check:
 // https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/
 const uploadAttachments = (jiraKey, parts, settings) => {
-  const connection = new http.Connection(settings.jiraEndpointUrl + '/rest/api/3', null, 15000);
-  connection.addHeader('Authorization', 'Basic ' + settings.jiraApiToken);
+  const connection = createJiraConnection(http, settings, 15000);
   connection.addHeader('Accept', 'application/json');
   connection.addHeader('X-Atlassian-Token', 'no-check');
 
@@ -33,8 +33,9 @@ exports.rule = entities.Issue.onChange({
     ctx.issue.attachments.added.isNotEmpty(),
   action: ctx => {
     try {
-      workflow.check(!!ctx.settings.jiraEndpointUrl && !!ctx.settings.jiraApiToken,
-        'Configure jiraEndpointUrl e jiraApiToken antes de sincronizar anexos.');
+      const jiraConfigurationError = getJiraConfigurationError(ctx.settings);
+      workflow.check(!jiraConfigurationError,
+        jiraConfigurationError || 'Configure Jira authentication before synchronizing attachments.');
 
       const added = [];
       ctx.issue.attachments.added.forEach(attachment => added.push(attachment));

@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Task export</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      min-height: 100%;
+      margin: 0;
+      padding: 20px;
+      background: #ffffff;
+      color: #1f2328;
+      font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #export-options { margin: 0 0 16px; padding: 12px; border: 1px solid #d0d7de; border-radius: 4px; }
+    #export-options legend { padding: 0 4px; font-weight: 600; }
+    .export-option { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+    .option-help { display: inline-grid; place-items: center; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 50%; color: #57606a; font-size: 11px; font-weight: 700; cursor: help; }
+    #apply-options { min-height: 32px; margin-top: 8px; border: 1px solid #1868db; border-radius: 4px; background: #1868db; color: #ffffff; padding: 6px 12px; font: inherit; font-weight: 500; cursor: pointer; }
+    #task-preview { margin: 0 0 16px; }
+    #task-preview h2 { margin: 0 0 8px; font-size: 14px; }
+    #task-list-hint { margin: 0 0 8px; color: #57606a; font-size: 12px; }
+    #task-sort { min-height: 32px; margin: 0 0 8px; border: 1px solid #8c959f; border-radius: 4px; background: #ffffff; color: #1f2328; padding: 4px 8px; font: inherit; }
+    #task-list { max-height: min(50vh, 420px); margin: 0; padding: 0; overflow: auto; list-style: none; }
+    .task-item { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; margin: 4px 0; padding: 6px 8px; border: 1px solid #d0d7de; border-radius: 4px; background: #f6f8fa; cursor: grab; }
+    .task-item.dragging { opacity: .5; }
+    .task-item:focus-visible { outline: 2px solid #1868db; outline-offset: 2px; }
+    .drag-handle { color: #57606a; font-size: 16px; line-height: 1; }
+    .task-id { flex: 0 0 auto; color: #57606a; font-weight: 600; white-space: nowrap; }
+    .task-title { min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+    .export-split { display: inline-flex; position: relative; }
+    #export-primary, #export-menu summary { min-height: 32px; border: 1px solid #1868db; background: #1868db; color: #ffffff; padding: 6px 12px; font: inherit; font-weight: 500; cursor: pointer; }
+    #export-primary { border-radius: 4px 0 0 4px; }
+    #export-menu { display: inline-block; }
+    #export-menu summary { border-left-color: rgba(255, 255, 255, .55); border-radius: 0 4px 4px 0; list-style: none; }
+    #export-menu summary::-webkit-details-marker { display: none; }
+    #export-menu summary::after { content: '▾'; margin-left: 8px; }
+    #task-export-actions { position: absolute; z-index: 1; display: flex; flex-direction: column; gap: 4px; min-width: 100%; margin-top: 4px; padding: 4px; border: 1px solid #d0d7de; border-radius: 4px; background: #ffffff; box-shadow: 0 4px 12px rgba(31, 35, 40, .15); }
+    #task-export-actions[hidden], #zip[hidden] { display: none !important; }
+    #task-export-actions button {
+      min-height: 32px;
+      border: 1px solid #8c959f;
+      border-radius: 3px;
+      background: #f6f8fa;
+      color: #1f2328;
+      padding: 6px 12px;
+      font: inherit;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    #export-primary:focus-visible, #export-menu summary:focus-visible, #task-export-actions button:focus-visible { outline: 2px solid #1868db; outline-offset: 2px; }
+    #export-primary:disabled { cursor: wait; opacity: .65; }
+    #status { margin: 0 0 16px; }
+    .warning { color: #9a6700; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #1f2023; color: #f0f2f5; }
+      #task-export-actions { border-color: #6e7681; background: #2d3036; box-shadow: 0 4px 12px rgba(0, 0, 0, .35); }
+      #task-export-actions button { border-color: #6e7681; background: #2d3036; color: #f0f2f5; }
+      #task-list-hint, .drag-handle { color: #a7b0bb; }
+      .task-id { color: #a7b0bb; }
+      #export-options { border-color: #6e7681; }
+      .option-help { color: #a7b0bb; }
+      #task-sort { border-color: #6e7681; background: #2d3036; color: #f0f2f5; }
+      .task-item { border-color: #6e7681; background: #2d3036; }
+      #export-primary:focus-visible, #export-menu summary:focus-visible, #task-export-actions button:focus-visible { outline-color: #58a6ff; }
+      .warning { color: #e3b341; }
+    }
+  </style>
+</head>
+<body class="plugin">
+  <p id="status" role="status" aria-live="polite">Loading export…</p>
+  <fieldset id="export-options" hidden>
+    <legend id="export-options-title">Export options</legend>
+    <label class="export-option"><input id="include-subtasks" type="checkbox"> <span id="include-subtasks-label">Include subtasks</span><span id="include-subtasks-help" class="option-help" tabindex="0">?</span></label>
+    <label class="export-option"><input id="include-fields" type="checkbox"> <span id="include-fields-label">Include fields</span><span id="include-fields-help" class="option-help" tabindex="0">?</span></label>
+    <label class="export-option"><input id="include-tags" type="checkbox"> <span id="include-tags-label">Include tags</span><span id="include-tags-help" class="option-help" tabindex="0">?</span></label>
+    <label class="export-option"><input id="include-diagram" type="checkbox"> <span id="include-diagram-label">Include task relation diagram</span><span id="include-diagram-help" class="option-help" tabindex="0">?</span></label>
+    <label class="export-option"><input id="separate-files" type="checkbox"> <span id="separate-files-label">Separate files for multiple tasks</span><span id="separate-files-help" class="option-help" tabindex="0">?</span></label>
+    <button id="apply-options" type="button">Update preview</button>
+  </fieldset>
+  <section id="task-preview" hidden>
+    <h2 id="task-list-heading">Tasks to export</h2>
+    <p id="task-list-hint">Drag tasks to change the export order.</p>
+    <label id="task-sort-label" for="task-sort">Quick order</label>
+    <select id="task-sort">
+      <option value="manual">Manual order</option>
+      <option value="title">Task title (natural)</option>
+      <option value="id">Task ID (natural)</option>
+    </select>
+    <ol id="task-list" tabindex="0"></ol>
+  </section>
+  <div class="export-split">
+    <button id="export-primary" type="button">Export</button>
+    <details id="export-menu">
+      <summary id="export-format" aria-label="Select export format">Markdown</summary>
+      <div id="task-export-actions" hidden>
+        <button id="markdown" type="button" data-export-format="markdown">Markdown</button>
+        <button id="pdf" type="button" data-export-format="pdf">PDF</button>
+        <button id="clipboard" type="button" data-export-format="clipboard">Copy Markdown</button>
+        <button id="zip" type="button" data-export-format="zip" hidden>ZIP</button>
+      </div>
+    </details>
+  </div>
+  <script src="client-export.js"></script>
+  <script type="module">
+    const status = document.getElementById('status');
+    const actions = document.getElementById('task-export-actions');
+    const zipButton = document.getElementById('zip');
+    const exportPrimary = document.getElementById('export-primary');
+    const exportFormat = document.getElementById('export-format');
+    const taskPreview = document.getElementById('task-preview');
+    const taskList = document.getElementById('task-list');
+    const taskSort = document.getElementById('task-sort');
+    const exportMenu = document.getElementById('export-menu');
+    const exportOptions = document.getElementById('export-options');
+    const applyOptions = document.getElementById('apply-options');
+    const optionInputs = {
+      includeSubtasks: document.getElementById('include-subtasks'),
+      includeFields: document.getElementById('include-fields'),
+      includeTags: document.getElementById('include-tags'),
+      includeTaskRelationDiagram: document.getElementById('include-diagram'),
+      separateFilesForMultipleTasks: document.getElementById('separate-files')
+    };
+    const messages = {
+      en: {
+        loading: 'Loading export…',
+        markdown: 'Download Markdown',
+        pdf: 'Download PDF',
+        zip: 'Download ZIP',
+        clipboard: 'Copy Markdown',
+        formatMarkdown: 'Markdown',
+        formatPdf: 'PDF',
+        formatZip: 'ZIP archive',
+        selectFormat: 'Select export format',
+        copied: 'Markdown copied to the clipboard.',
+        export: 'Export',
+        taskList: 'Tasks to export',
+        reorderHint: 'Drag tasks to change the export order.',
+        reordered: ' Export order updated.',
+        quickOrder: 'Quick order',
+        manualOrder: 'Manual order',
+        titleOrder: 'Task title (natural)',
+        idOrder: 'Task ID (natural)',
+        sorted: ' Tasks sorted.',
+        options: 'Export options',
+        applyOptions: 'Update preview',
+        includeSubtasks: 'Include subtasks',
+        includeFields: 'Include fields',
+        includeTags: 'Include tags',
+        includeDiagram: 'Include task relation diagram',
+        separateFiles: 'Separate files for multiple tasks',
+        helpSubtasks: 'Also export every subtask below the current task.',
+        helpFields: 'Add the task custom fields to each export.',
+        helpTags: 'Add the task tags to each export.',
+        helpDiagram: 'Add a diagram of relations among exported tasks.',
+        helpSeparateFiles: 'Enable the ZIP download when multiple tasks are exported.',
+        ready: count => count === 1 ? '1 task ready to export.' : count + ' tasks ready to export.',
+        duplicateWarning: ' Duplicate references were skipped.',
+        error: 'Unable to prepare the export. Try again or contact an administrator.',
+        downloadError: 'Download failed. Please try again.'
+      },
+      pt: {
+        loading: 'Preparando exportação…',
+        markdown: 'Baixar Markdown',
+        pdf: 'Baixar PDF',
+        zip: 'Baixar ZIP',
+        clipboard: 'Copiar Markdown',
+        formatMarkdown: 'Markdown',
+        formatPdf: 'PDF',
+        formatZip: 'Arquivo ZIP',
+        selectFormat: 'Selecionar formato de exportação',
+        copied: 'Markdown copiado para a área de transferência.',
+        export: 'Exportar',
+        taskList: 'Tarefas para exportar',
+        reorderHint: 'Arraste as tarefas para alterar a ordem de exportação.',
+        reordered: ' Ordem de exportação atualizada.',
+        quickOrder: 'Ordenação rápida',
+        manualOrder: 'Ordem manual',
+        titleOrder: 'Título da tarefa (natural)',
+        idOrder: 'ID da tarefa (natural)',
+        sorted: ' Tarefas ordenadas.',
+        options: 'Opções de exportação',
+        applyOptions: 'Atualizar prévia',
+        includeSubtasks: 'Incluir subtarefas',
+        includeFields: 'Incluir campos',
+        includeTags: 'Incluir tags',
+        includeDiagram: 'Incluir diagrama de relações das tarefas',
+        separateFiles: 'Arquivos separados para múltiplas tarefas',
+        helpSubtasks: 'Também exporta todas as subtarefas abaixo da tarefa atual.',
+        helpFields: 'Adiciona os campos personalizados da tarefa a cada exportação.',
+        helpTags: 'Adiciona as tags da tarefa a cada exportação.',
+        helpDiagram: 'Adiciona um diagrama das relações entre as tarefas exportadas.',
+        helpSeparateFiles: 'Habilita o download ZIP quando várias tarefas são exportadas.',
+        ready: count => count === 1 ? '1 tarefa pronta para exportação.' : count + ' tarefas prontas para exportação.',
+        duplicateWarning: ' Referências duplicadas foram ignoradas.',
+        error: 'Não foi possível preparar a exportação. Tente novamente ou contate um administrador.',
+        downloadError: 'O download falhou. Tente novamente.'
+      }
+    };
+    let text = messages.en;
+
+    const download = (fileName, mimeType, content) => {
+      const body = content instanceof Uint8Array ? content : new TextEncoder().encode(content);
+      const blob = new Blob([body], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      setTimeout(() => {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }, 0);
+    };
+
+    const withBusyButton = (button, action) => {
+      button.disabled = true;
+      try {
+        return Promise.resolve(action()).catch(error => {
+          status.classList.add('warning');
+          status.textContent = text.downloadError;
+          console.error('Task Export: download failed.', error);
+        }).finally(() => {
+          button.disabled = false;
+        });
+      } catch (error) {
+        status.classList.add('warning');
+        status.textContent = text.downloadError;
+        console.error('Task Export: download failed.', error);
+        button.disabled = false;
+      }
+    };
+
+    const copyMarkdown = async markdown => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(markdown);
+        return;
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = markdown;
+      textarea.style.position = 'fixed';
+      document.body.append(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('Clipboard access was denied.');
+    };
+
+    const initialize = async () => {
+      const host = await YTApp.register();
+      const locale = String(host.locale || 'en').toLowerCase();
+      text = locale.startsWith('pt') ? messages.pt : messages.en;
+      document.documentElement.lang = locale;
+      document.title = locale.startsWith('pt') ? 'Exportar tarefa' : 'Task export';
+      status.textContent = text.loading;
+      document.getElementById('markdown').textContent = text.markdown;
+      document.getElementById('pdf').textContent = text.pdf;
+      zipButton.textContent = text.zip;
+      document.getElementById('clipboard').textContent = text.clipboard;
+      exportPrimary.textContent = text.export;
+      exportFormat.setAttribute('aria-label', text.selectFormat);
+      document.getElementById('task-list-heading').textContent = text.taskList;
+      document.getElementById('task-list-hint').textContent = text.reorderHint;
+      document.getElementById('task-sort-label').textContent = text.quickOrder;
+      taskSort.querySelector('option[value="manual"]').textContent = text.manualOrder;
+      taskSort.querySelector('option[value="title"]').textContent = text.titleOrder;
+      taskSort.querySelector('option[value="id"]').textContent = text.idOrder;
+      document.getElementById('export-options-title').textContent = text.options;
+      applyOptions.textContent = text.applyOptions;
+      [
+        ['include-subtasks', text.includeSubtasks, text.helpSubtasks],
+        ['include-fields', text.includeFields, text.helpFields],
+        ['include-tags', text.includeTags, text.helpTags],
+        ['include-diagram', text.includeDiagram, text.helpDiagram],
+        ['separate-files', text.separateFiles, text.helpSeparateFiles]
+      ].forEach(([id, label, help]) => {
+        document.getElementById(id + '-label').textContent = label;
+        const helpElement = document.getElementById(id + '-help');
+        helpElement.title = help;
+        helpElement.setAttribute('aria-label', help);
+      });
+
+      let payload = await host.fetchApp('markdown-export-http/data', { scope: true });
+      Object.entries(optionInputs).forEach(([key, input]) => { input.checked = payload.projectOptions[key]; });
+      exportOptions.hidden = false;
+      let orderedDocuments = payload.documents.slice();
+      const taskDetails = exportDocument => {
+        const task = exportDocument.task || {};
+        const heading = String(exportDocument.markdown || '').match(/^#\s+(.+)$/m);
+        const fileId = String(exportDocument.fileName || '').match(/[A-Za-z][A-Za-z0-9]*-\d+/);
+        const headingText = heading ? heading[1].replace(/\\(.)/g, '$1') : exportDocument.fileName;
+        const summary = task.summary || headingText.replace(/^.*\.md\s+—\s+/, '');
+        return {
+          idReadable: exportDocument.idReadable || task.idReadable || (fileId ? fileId[0] : ''),
+          summary,
+          title: typeof exportDocument.originalTitle === 'string'
+            ? exportDocument.originalTitle
+            : summary
+        };
+      };
+      const orderedMarkdown = () => orderedDocuments.map(exportDocument => exportDocument.markdown).join('\n---\n\n') +
+        (payload.trailingMarkdown || '');
+      const renderTaskList = () => {
+        taskList.replaceChildren();
+        orderedDocuments.forEach(exportDocument => {
+          const task = taskDetails(exportDocument);
+          const item = document.createElement('li');
+          item.className = 'task-item';
+          item.draggable = true;
+          item.tabIndex = 0;
+          item.innerHTML = '<span class="drag-handle" aria-hidden="true">⠿</span>';
+          const taskId = document.createElement('span');
+          taskId.className = 'task-id';
+          taskId.textContent = task.idReadable;
+          const taskTitle = document.createElement('span');
+          taskTitle.className = 'task-title';
+          taskTitle.textContent = task.title;
+          item.append(taskId, taskTitle);
+          item.addEventListener('dragstart', event => {
+            item.classList.add('dragging');
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', exportDocument.fileName);
+          });
+          item.addEventListener('dragend', () => item.classList.remove('dragging'));
+          item.addEventListener('dragover', event => event.preventDefault());
+          item.addEventListener('drop', event => {
+            event.preventDefault();
+            const sourceFileName = event.dataTransfer.getData('text/plain');
+            const sourceIndex = orderedDocuments.findIndex(candidate => candidate.fileName === sourceFileName);
+            const targetIndex = orderedDocuments.indexOf(exportDocument);
+            if (sourceIndex < 0 || sourceIndex === targetIndex) return;
+            const [movedDocument] = orderedDocuments.splice(sourceIndex, 1);
+            orderedDocuments.splice(targetIndex, 0, movedDocument);
+            taskSort.value = 'manual';
+            renderTaskList();
+            status.classList.remove('warning');
+            status.textContent = text.ready(orderedDocuments.length) + text.reordered;
+          });
+          taskList.append(item);
+        });
+      };
+      const collator = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
+      taskSort.addEventListener('change', () => {
+        if (taskSort.value === 'manual') return;
+        orderedDocuments.sort((left, right) => {
+          const leftTask = taskDetails(left);
+          const rightTask = taskDetails(right);
+          const leftValue = taskSort.value === 'id'
+            ? leftTask.idReadable || left.fileName
+            : leftTask.title;
+          const rightValue = taskSort.value === 'id'
+            ? rightTask.idReadable || right.fileName
+            : rightTask.title;
+          return collator.compare(leftValue, rightValue);
+        });
+        renderTaskList();
+        status.classList.remove('warning');
+        status.textContent = text.ready(orderedDocuments.length) + text.sorted;
+      });
+      status.textContent = text.ready(orderedDocuments.length);
+      if (payload.warnings.length) {
+        status.classList.add('warning');
+        status.textContent += text.duplicateWarning;
+      }
+      renderTaskList();
+      taskPreview.hidden = false;
+      taskList.focus();
+      actions.hidden = false;
+      let selectedExportFormat = 'markdown';
+      const formatLabel = format => ({
+        markdown: text.formatMarkdown,
+        pdf: text.formatPdf,
+        clipboard: text.clipboard,
+        zip: text.formatZip
+      })[format];
+      const updateExportSelection = format => {
+        selectedExportFormat = format;
+        exportFormat.textContent = formatLabel(format);
+        exportPrimary.setAttribute('aria-label', text.export + ': ' + formatLabel(format));
+      };
+      const syncZipOption = () => {
+        zipButton.hidden = !(payload.separateFilesForMultipleTasks && orderedDocuments.length > 1);
+        if (zipButton.hidden && selectedExportFormat === 'zip') updateExportSelection('markdown');
+      };
+      const runExport = format => {
+        if (format === 'markdown') return withBusyButton(
+          exportPrimary,
+          () => download(orderedDocuments.length === 1 ? orderedDocuments[0].fileName : 'tasks.md',
+            'text/markdown; charset=utf-8', orderedMarkdown())
+        );
+        if (format === 'pdf') return withBusyButton(
+          exportPrimary,
+          () => download(payload.issue.idReadable + '-tasks.pdf', 'application/pdf',
+            TaskExportClient.createPdfBytes(orderedMarkdown()))
+        );
+        if (format === 'zip') return withBusyButton(
+          exportPrimary,
+          () => download(payload.issue.idReadable + '-tasks.zip', 'application/zip',
+            TaskExportClient.createZipBytes(orderedDocuments))
+        );
+        return withBusyButton(exportPrimary, async () => {
+          await copyMarkdown(orderedMarkdown());
+          status.classList.remove('warning');
+          status.textContent = text.copied;
+        });
+      };
+      document.querySelectorAll('[data-export-format]').forEach(button => {
+        button.onclick = () => {
+          updateExportSelection(button.dataset.exportFormat);
+          exportMenu.open = false;
+          exportPrimary.focus();
+        };
+      });
+      exportPrimary.onclick = () => runExport(selectedExportFormat);
+      syncZipOption();
+      applyOptions.onclick = async () => {
+        applyOptions.disabled = true;
+        status.classList.remove('warning');
+        status.textContent = text.loading;
+        try {
+          const query = Object.entries(optionInputs).reduce((values, [key, input]) => {
+            values[key] = input.checked;
+            return values;
+          }, {});
+          payload = await host.fetchApp('markdown-export-http/data', { scope: true, query });
+          orderedDocuments = payload.documents.slice();
+          taskSort.value = 'manual';
+          renderTaskList();
+          status.textContent = text.ready(orderedDocuments.length);
+          if (payload.warnings.length) {
+            status.classList.add('warning');
+            status.textContent += text.duplicateWarning;
+          }
+          syncZipOption();
+          taskList.focus();
+        } catch (error) {
+          status.classList.add('warning');
+          status.textContent = text.error;
+          console.error('Task Export: failed to update export options.', error);
+        } finally {
+          applyOptions.disabled = false;
+        }
+      };
+    };
+
+    initialize().catch(error => {
+      status.classList.add('warning');
+      status.textContent = text.error;
+      console.error('Task Export: failed to load export data.', error);
+    });
+  </script>
+</body>
+</html>

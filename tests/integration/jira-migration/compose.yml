@@ -1,0 +1,37 @@
+name: jira-migration-integration
+
+services:
+  youtrack:
+    image: "${YOUTRACK_IMAGE_REPOSITORY:-jetbrains/youtrack}:${YOUTRACK_IMAGE_TAG:?Set YOUTRACK_IMAGE_TAG to a full Docker Hub build tag.}"
+    ports:
+      - "${YOUTRACK_HOST_PORT:-8089}:8080"
+    volumes:
+      - youtrack-data:/opt/youtrack/data
+      - youtrack-conf:/opt/youtrack/conf
+      - youtrack-logs:/opt/youtrack/logs
+      - youtrack-backups:/opt/youtrack/backups
+
+  runner:
+    profiles: ["verify"]
+    build:
+      context: ../../..
+      dockerfile: tests/integration/runner/Dockerfile
+      args:
+        NODE_IMAGE: "${RUNNER_NODE_IMAGE:-node:22-alpine}"
+    depends_on:
+      - youtrack
+    environment:
+      YOUTRACK_IMAGE_TAG: "${YOUTRACK_IMAGE_TAG:?Set YOUTRACK_IMAGE_TAG.}"
+      YOUTRACK_TEST_BASE_URL: http://youtrack:8080
+      YOUTRACK_TEST_TOKEN: "${YOUTRACK_TEST_TOKEN:-}"
+      JIRA_CLOUD_BASE_URL: "${JIRA_CLOUD_BASE_URL:-}"
+      JIRA_CLOUD_EMAIL: "${JIRA_CLOUD_EMAIL:-}"
+      JIRA_CLOUD_API_TOKEN: "${JIRA_CLOUD_API_TOKEN:-}"
+      JIRA_CLOUD_PROJECT_KEY: "${JIRA_CLOUD_PROJECT_KEY:-}"
+    command: ["jira-migration", "--publish"]
+
+volumes:
+  youtrack-data:
+  youtrack-conf:
+  youtrack-logs:
+  youtrack-backups:
