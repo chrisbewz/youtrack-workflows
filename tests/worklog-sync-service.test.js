@@ -96,6 +96,21 @@ test('YOU-40 exports a work item in the representation returned for E3-381', () 
   assert.equal(dependencies.calls.create[0].payload.comment, 'Testes');
 });
 
+test('YOU-40 diagnostic-only runs do not read or create Jira worklogs', () => {
+  const dependencies = fakeDependencies();
+  const logs = [];
+
+  const result = syncWorklogs({ workItems: { size: 0, get: () => null } }, 'WTDE3-225', dependencies, message => logs.push(message), {
+    diagnostics: true,
+    diagnosticOnly: true
+  });
+
+  assert.deepEqual(result, { diagnostic: true });
+  assert.deepEqual(dependencies.calls.fetch, []);
+  assert.deepEqual(dependencies.calls.create, []);
+  assert.match(logs.at(-1), /no Jira worklogs were read or created/);
+});
+
 test('YOU-40 exports YouTrack work items with duration, date, description and source marker', () => {
   const dependencies = fakeDependencies();
   const logs = [];

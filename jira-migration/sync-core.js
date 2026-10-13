@@ -261,7 +261,10 @@ const syncOnlyWorklogs = (issue, ctx, collector) => {
   connection.addHeader('Authorization', 'Basic ' + ctx.settings.jiraApiToken);
   connection.addHeader('Content-Type', 'application/json');
   try {
-    return syncWorklogs(issue, decision.jiraKey, createWorklogDependencies(connection), log, { diagnostics: true });
+    return syncWorklogs(issue, decision.jiraKey, createWorklogDependencies(connection), log, {
+      diagnostics: true,
+      diagnosticOnly: true
+    });
   } catch (error) {
     const errorMsg = describeError(error);
     log('[Jira Sync] Worklog synchronization failed: ' + errorMsg);

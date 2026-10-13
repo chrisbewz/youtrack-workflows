@@ -10,7 +10,10 @@ test('YOU-40 reports collection capabilities and safe work-item metadata without
       id: '199-10',
       date: '2026-10-13',
       duration: { minutes: 1 },
-      text: 'must not appear in diagnostics'
+      text: 'must not appear in diagnostics',
+      $$type: 'IssueWorkItem',
+      toString: () => 'IssueWorkItem(199-10)',
+      toShortString: () => 'Testes'
     } : null,
     forEach: () => {}
   });
@@ -20,5 +23,8 @@ test('YOU-40 reports collection capabilities and safe work-item metadata without
   assert.match(result.items[0], /source=get\[0\]/);
   assert.match(result.items[0], /id=199-10/);
   assert.match(result.items[0], /durationMinutes=1/);
+  assert.match(result.items[0], /\$\$type=IssueWorkItem/);
+  assert.match(result.items[0], /toStringId=199-10/);
+  assert.match(result.items[0], /toShortStringId=non-id\(length=6\)/);
   assert.doesNotMatch(result.items[0], /must not appear/);
 });

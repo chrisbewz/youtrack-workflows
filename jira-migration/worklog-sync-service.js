@@ -59,6 +59,10 @@ const syncWorklogs = (issue, jiraKey, dependencies, log, options) => {
     const diagnostics = describeWorkItemsRuntime(issue.workItems);
     log('[Jira Sync][Diagnostic] workItems collection: ' + diagnostics.collection);
     diagnostics.items.forEach(item => log('[Jira Sync][Diagnostic] workItem ' + item));
+    if (options.diagnosticOnly) {
+      log('[Jira Sync][Diagnostic] Complete: no Jira worklogs were read or created.');
+      return { diagnostic: true };
+    }
   }
   const workItems = toArray(issue.workItems);
   const exportedIds = getExportedWorkItemIds(dependencies.fetchJiraWorklogs(jiraKey));

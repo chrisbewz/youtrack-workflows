@@ -13,6 +13,17 @@ const summarizeScalar = value => {
   return '[' + typeof value + ']';
 };
 
+const describeMethodIdentity = (item, methodName) => {
+  try {
+    if (!item || typeof item[methodName] !== 'function') return 'unavailable';
+    const value = String(item[methodName]());
+    const id = value.match(/\b\d+-\d+\b/);
+    return id ? id[0] : 'non-id(length=' + value.length + ')';
+  } catch (error) {
+    return 'error';
+  }
+};
+
 const describeWorkItem = (item, source) => {
   const duration = safeRead(item, 'duration');
   const keys = item && typeof item === 'object'
@@ -22,11 +33,14 @@ const describeWorkItem = (item, source) => {
     ' type=' + (item === null ? 'null' : typeof item) +
     ' id=' + summarizeScalar(safeRead(item, 'id')) +
     ' entityId=' + summarizeScalar(safeRead(item, 'entityId')) +
+    ' $$type=' + summarizeScalar(safeRead(item, '$$type')) +
     ' date=' + summarizeScalar(safeRead(item, 'date')) +
     ' durationType=' + (duration === null ? 'null' : typeof duration) +
     ' durationMinutes=' + summarizeScalar(safeRead(duration, 'minutes')) +
     ' textPresent=' + (safeRead(item, 'text') !== undefined) +
     ' descriptionPresent=' + (safeRead(item, 'description') !== undefined) +
+    ' toStringId=' + describeMethodIdentity(item, 'toString') +
+    ' toShortStringId=' + describeMethodIdentity(item, 'toShortString') +
     ' keys=' + keys;
 };
 
