@@ -4,7 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { copyWorkflowPackage } = require('../scripts/upload-workflow');
+const { copyWorkflowPackage, getWorkflowCliInvocation } = require('../scripts/upload-workflow');
+
+test('workflow upload invokes the JavaScript CLI directly on Windows', () => {
+  const invocation = getWorkflowCliInvocation('C:\\repo', 'win32');
+
+  assert.equal(invocation.binary, process.execPath);
+  assert.equal(invocation.args[0], 'C:\\repo\\node_modules\\@jetbrains\\youtrack-scripting\\bin\\youtrack-workflow');
+});
 
 test('workflow upload staging excludes local dependency and IDE directories', () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workflow-upload-test-'));
