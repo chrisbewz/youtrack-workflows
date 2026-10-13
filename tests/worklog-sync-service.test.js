@@ -46,6 +46,18 @@ test('YOU-40 traverses workflow sets with a standard visitor function', () => {
   assert.deepEqual(toArray(workflowSet), [item]);
 });
 
+test('YOU-40 reads indexed workflow sets without relying on visitor arguments', () => {
+  const first = workItem('90-4');
+  const second = workItem('90-5');
+  const workflowSet = {
+    size: 2,
+    get(index) { return [first, second][index]; },
+    forEach(visitor) { visitor(); visitor(); }
+  };
+
+  assert.deepEqual(toArray(workflowSet), [first, second]);
+});
+
 test('YOU-40 accepts the YouTrack work-item text and ISO-date representation', () => {
   const payload = buildJiraWorklog({
     id: '199-10',

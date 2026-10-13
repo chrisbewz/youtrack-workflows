@@ -3,6 +3,11 @@ const { describeError } = require('./error-message');
 
 const toArray = collection => {
   const values = [];
+  const size = collection && Number(collection.size);
+  if (collection && typeof collection.get === 'function' && Number.isFinite(size) && size >= 0) {
+    for (let index = 0; index < size; index += 1) values.push(collection.get(index));
+    return values;
+  }
   if (collection && typeof collection.forEach === 'function') {
     collection.forEach(function(value) { values.push(value); });
   }
