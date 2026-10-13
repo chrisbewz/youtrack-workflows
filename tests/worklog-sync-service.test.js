@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { syncWorklogs } = require('../jira-migration/worklog-sync-service');
+const { syncWorklogs, toArray, buildJiraWorklog } = require('../jira-migration/worklog-sync-service');
 const { describeError } = require('../jira-migration/error-message');
 
 const workItem = (id, overrides = {}) => ({
@@ -32,6 +32,56 @@ test('YOU-40 preserves exceptions without a JavaScript message for workflow diag
 
   assert.equal(describeError(runtimeException), 'java.net.SocketTimeoutException: Read timed out');
   assert.equal(describeError(new Error('Forbidden')), 'Forbidden');
+});
+
+test('YOU-40 traverses workflow sets with a standard visitor function', () => {
+  const item = workItem('90-0');
+  const workflowSet = {
+    forEach(visitor) {
+      assert.ok(Object.prototype.hasOwnProperty.call(visitor, 'prototype'));
+      visitor(item);
+    }
+  };
+
+  assert.deepEqual(toArray(workflowSet), [item]);
+});
+
+test('YOU-40 accepts the YouTrack work-item text and ISO-date representation', () => {
+  const payload = buildJiraWorklog({
+    id: '199-10',
+    duration: { minutes: 1 },
+    date: '2026-10-13',
+    text: 'Testes',
+    author: { login: 'christian.bewzenko' },
+    type: { name: 'Development' }
+  });
+
+  assert.equal(payload.timeSpentSeconds, 60);
+  assert.equal(payload.started, '2026-10-13T00:00:00.000+0000');
+  assert.equal(payload.comment, 'Testes');
+});
+
+test('YOU-40 exports a work item in the representation returned for E3-381', () => {
+  const dependencies = fakeDependencies();
+  const issue = {
+    workItems: {
+      forEach(visitor) {
+        visitor({
+          id: '199-10',
+          duration: { minutes: 1 },
+          date: '2026-10-13',
+          text: 'Testes',
+          author: { login: 'christian.bewzenko' },
+          type: { name: 'Development' }
+        });
+      }
+    }
+  };
+
+  assert.deepEqual(syncWorklogs(issue, 'WTDE3-225', dependencies, () => {}), {
+    exported: 1, skipped: 0, failed: 0
+  });
+  assert.equal(dependencies.calls.create[0].payload.comment, 'Testes');
 });
 
 test('YOU-40 exports YouTrack work items with duration, date, description and source marker', () => {

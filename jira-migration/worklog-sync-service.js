@@ -3,13 +3,20 @@ const { describeError } = require('./error-message');
 
 const toArray = collection => {
   const values = [];
-  if (collection && typeof collection.forEach === 'function') collection.forEach(value => values.push(value));
+  if (collection && typeof collection.forEach === 'function') {
+    collection.forEach(function(value) { values.push(value); });
+  }
   return values;
 };
 
 const getDurationMinutes = workItem => {
   if (typeof workItem.duration === 'number') return workItem.duration;
   return workItem.duration && workItem.duration.minutes;
+};
+
+const getWorkItemTimestamp = workItem => {
+  if (typeof workItem.date === 'number') return workItem.date;
+  return Date.parse(workItem.date);
 };
 
 const toJiraStartedDate = timestamp => new Date(timestamp).toISOString().replace('Z', '+0000');
@@ -28,8 +35,8 @@ const getExportedWorkItemIds = jiraWorklogs => {
 
 const buildJiraWorklog = workItem => ({
   timeSpentSeconds: getDurationMinutes(workItem) * 60,
-  started: toJiraStartedDate(workItem.date),
-  comment: workItem.description || '',
+  started: toJiraStartedDate(getWorkItemTimestamp(workItem)),
+  comment: workItem.description || workItem.text || '',
   properties: [{
     key: WORK_ITEM_PROPERTY_KEY,
     value: {
@@ -48,7 +55,7 @@ const syncWorklogs = (issue, jiraKey, dependencies, log) => {
   workItems.forEach(workItem => {
     const workItemId = String(workItem.id);
     const durationMinutes = getDurationMinutes(workItem);
-    if (!workItem.id || !Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(workItem.date)) {
+    if (!workItem.id || !Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(getWorkItemTimestamp(workItem))) {
       result.skipped += 1;
       log('[Jira Sync] Work item ' + workItemId + ' skipped: invalid id, duration, or date.');
       return;
@@ -74,6 +81,7 @@ const syncWorklogs = (issue, jiraKey, dependencies, log) => {
 
 module.exports = {
   WORK_ITEM_PROPERTY_KEY,
+  toArray,
   buildJiraWorklog,
   getExportedWorkItemIds,
   syncWorklogs
