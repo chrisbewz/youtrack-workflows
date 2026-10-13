@@ -25,6 +25,13 @@ const getWorkItemTimestamp = workItem => {
   return Date.parse(workItem.date);
 };
 
+const getWorkItemSourceId = (issue, workItem) => {
+  if (workItem.id !== null && workItem.id !== undefined && workItem.id !== '') return String(workItem.id);
+  const created = Number(workItem.created);
+  if (issue && issue.id && Number.isFinite(created)) return 'yt-created:' + issue.id + ':' + created;
+  return undefined;
+};
+
 const toJiraStartedDate = timestamp => new Date(timestamp).toISOString().replace('Z', '+0000');
 
 const getExportedWorkItemIds = jiraWorklogs => {
@@ -39,14 +46,14 @@ const getExportedWorkItemIds = jiraWorklogs => {
   return exported;
 };
 
-const buildJiraWorklog = workItem => ({
+const buildJiraWorklog = (workItem, sourceId) => ({
   timeSpentSeconds: getDurationMinutes(workItem) * 60,
   started: toJiraStartedDate(getWorkItemTimestamp(workItem)),
   comment: workItem.description || workItem.text || '',
   properties: [{
     key: WORK_ITEM_PROPERTY_KEY,
     value: {
-      id: String(workItem.id),
+      id: String(sourceId || workItem.id),
       author: workItem.author && workItem.author.login || null,
       type: workItem.type && workItem.type.name || null
     }
@@ -68,9 +75,9 @@ const syncWorklogs = (issue, jiraKey, dependencies, log, options) => {
   const exportedIds = getExportedWorkItemIds(dependencies.fetchJiraWorklogs(jiraKey));
 
   workItems.forEach(workItem => {
-    const workItemId = String(workItem.id);
+    const workItemId = getWorkItemSourceId(issue, workItem);
     const durationMinutes = getDurationMinutes(workItem);
-    if (!workItem.id || !Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(getWorkItemTimestamp(workItem))) {
+    if (!workItemId || !Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(getWorkItemTimestamp(workItem))) {
       result.skipped += 1;
       log('[Jira Sync] Work item ' + workItemId + ' skipped: invalid id, duration, or date.');
       return;
@@ -81,7 +88,7 @@ const syncWorklogs = (issue, jiraKey, dependencies, log, options) => {
     }
 
     try {
-      dependencies.createJiraWorklog(jiraKey, buildJiraWorklog(workItem));
+      dependencies.createJiraWorklog(jiraKey, buildJiraWorklog(workItem, workItemId));
       exportedIds[workItemId] = true;
       result.exported += 1;
     } catch (error) {
@@ -97,6 +104,7 @@ const syncWorklogs = (issue, jiraKey, dependencies, log, options) => {
 module.exports = {
   WORK_ITEM_PROPERTY_KEY,
   toArray,
+  getWorkItemSourceId,
   buildJiraWorklog,
   getExportedWorkItemIds,
   syncWorklogs

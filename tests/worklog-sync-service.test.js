@@ -96,6 +96,29 @@ test('YOU-40 exports a work item in the representation returned for E3-381', () 
   assert.equal(dependencies.calls.create[0].payload.comment, 'Testes');
 });
 
+test('YOU-40 uses the issue and creation timestamp when the workflow runtime omits the work-item ID', () => {
+  const dependencies = fakeDependencies();
+  const issue = {
+    id: 'E3-381',
+    workItems: {
+      size: 1,
+      get: () => ({
+        date: Date.UTC(2026, 9, 13),
+        created: 1791910518416,
+        duration: 1,
+        description: 'Testes',
+        author: { login: 'christian.bewzenko' },
+        type: { name: 'Desenvolvimento' }
+      })
+    }
+  };
+
+  assert.deepEqual(syncWorklogs(issue, 'WTDE3-225', dependencies, () => {}), {
+    exported: 1, skipped: 0, failed: 0
+  });
+  assert.equal(dependencies.calls.create[0].payload.properties[0].value.id, 'yt-created:E3-381:1791910518416');
+});
+
 test('YOU-40 diagnostic-only runs do not read or create Jira worklogs', () => {
   const dependencies = fakeDependencies();
   const logs = [];
