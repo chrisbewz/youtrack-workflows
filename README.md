@@ -289,7 +289,7 @@ Worklog synchronization is disabled by default. Set the project-level `worklogSy
 
 Before creating worklogs, the workflow reads the Jira worklogs (including properties) and skips any whose source work-item ID was exported previously. A failed worklog is logged and does not revert the issue synchronization or prevent the remaining worklogs from being attempted. Jira records the API-token user as the worklog author; the YouTrack author is retained as metadata because the Jira API does not accept an author override for this operation.
 
-Use the **Sync Jira Worklogs** action when you want to export time entries without synchronizing any other issue data. The action is available only for reported Jira-linked issues when both `syncMode` and `worklogSyncMode` are enabled. It uses the same duplicate detection and honors `Dry-Run`.
+Use the **Sync Jira Worklogs** action when you want to export time entries without synchronizing any other issue data. It is available on every reported issue. When invoked, it validates the Jira link and project settings, then reports the reason if synchronization cannot run. It uses the same duplicate detection and honors `Dry-Run`.
 
 This is intentionally one-way and additive: editing or removing a YouTrack work item triggers a reconciliation pass but does not alter or delete the corresponding Jira worklog. This prevents accidental deletion of time entries; updates and deletions can be added later with explicit Jira worklog-ID mapping and permissions.
 

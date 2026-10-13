@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { getWorklogSyncDecision } = require('../jira-migration/worklog-sync-decision');
+const { canShowWorklogSyncAction } = require('../jira-migration/worklog-action-visibility');
 
 const issue = jiraId => ({ fields: { 'Jira ID': jiraId } });
 const settings = { worklogSyncMode: 'Enabled', jiraEndpointUrl: 'https://jira.example', jiraApiToken: 'token' };
@@ -25,4 +26,9 @@ test('YOU-40 preserves Jira Sync dry-run mode for a dedicated worklog sync', () 
     isDryRun: true,
     jiraKey: 'PRJ-1'
   });
+});
+
+test('YOU-40 keeps the manual worklog action visible for every reported issue', () => {
+  assert.equal(canShowWorklogSyncAction({ isReported: true }), true);
+  assert.equal(canShowWorklogSyncAction({ isReported: false }), false);
 });

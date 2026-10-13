@@ -5,7 +5,7 @@
   "iconDark": "icons8-jira-48.png",
   "url": "https://github.com/chrisbewz/youtrack-workflows",
   "title" : "Jira Synchronization Manager",
-  "version" : "0.2.0",
+  "version" : "0.2.1",
   "minYouTrackVersion": "2024.3.0",
   "vendor" : {
     "name" : "Christian Celso Bewzenko",

@@ -1,6 +1,7 @@
 const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const syncCore = require('./sync-core');
+const { canShowWorklogSyncAction } = require('./worklog-action-visibility');
 
 /**
  * Action rule — exports only YouTrack work items to the linked Jira issue.
@@ -9,13 +10,7 @@ const syncCore = require('./sync-core');
 exports.rule = entities.Issue.action({
   title: 'Jira Worklog Sync',
   command: 'Sync Jira Worklogs',
-  guard: ctx => {
-    const mode = ctx.settings.syncMode || 'Disabled';
-    return ctx.issue.isReported &&
-      mode !== 'Disabled' &&
-      ctx.settings.worklogSyncMode === 'Enabled' &&
-      !!ctx.issue.fields['Jira ID'];
-  },
+  guard: ctx => canShowWorklogSyncAction(ctx.issue),
   action: ctx => {
     const collector = [];
     syncCore.syncOnlyWorklogs(ctx.issue, ctx, collector);
