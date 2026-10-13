@@ -1,5 +1,6 @@
 const WORK_ITEM_PROPERTY_KEY = 'youtrack-work-item';
 const { describeError } = require('./error-message');
+const { describeWorkItemsRuntime } = require('./worklog-runtime-diagnostics');
 
 const toArray = collection => {
   const values = [];
@@ -52,8 +53,13 @@ const buildJiraWorklog = workItem => ({
   }]
 });
 
-const syncWorklogs = (issue, jiraKey, dependencies, log) => {
+const syncWorklogs = (issue, jiraKey, dependencies, log, options) => {
   const result = { exported: 0, skipped: 0, failed: 0 };
+  if (options && options.diagnostics) {
+    const diagnostics = describeWorkItemsRuntime(issue.workItems);
+    log('[Jira Sync][Diagnostic] workItems collection: ' + diagnostics.collection);
+    diagnostics.items.forEach(item => log('[Jira Sync][Diagnostic] workItem ' + item));
+  }
   const workItems = toArray(issue.workItems);
   const exportedIds = getExportedWorkItemIds(dependencies.fetchJiraWorklogs(jiraKey));
 
