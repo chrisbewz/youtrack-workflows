@@ -44,6 +44,19 @@ const requireEnvironmentValue = name => {
   return value;
 };
 
+const getWorkflowCliInvocation = repositoryRoot => ({
+  // Calling the script with Node avoids spawnSync errors from npm's .cmd wrapper on Windows.
+  binary: process.execPath,
+  args: [path.join(
+    repositoryRoot,
+    'node_modules',
+    '@jetbrains',
+    'youtrack-scripting',
+    'bin',
+    'youtrack-workflow'
+  )]
+});
+
 const uploadWorkflow = (workflowName, environmentName) => {
   if (!/^[a-z0-9-]+$/i.test(workflowName)) throw new Error('Nome de workflow inválido.');
   if (!/^(prod|test)$/.test(environmentName)) throw new Error('Ambiente deve ser prod ou test.');
@@ -67,18 +80,13 @@ const uploadWorkflow = (workflowName, environmentName) => {
     console.log('Uploading ' + workflowName + ' with ' + copiedFiles.length + ' files (' +
       Array.from(EXCLUDED_DIRECTORIES).join(', ') + ' excluded)');
 
-    const binary = path.join(
-      repositoryRoot,
-      'node_modules',
-      '.bin',
-      process.platform === 'win32' ? 'youtrack-workflow.cmd' : 'youtrack-workflow'
-    );
-    const result = spawnSync(binary, [
+    const cli = getWorkflowCliInvocation(repositoryRoot);
+    const result = spawnSync(cli.binary, cli.args.concat([
       'upload',
       stagedWorkflow,
       '--host=' + host,
       '--token=' + token
-    ], {
+    ]), {
       stdio: 'inherit',
       shell: process.platform === 'win32',
       env: { ...process.env, NODE_TLS_REJECT_UNAUTHORIZED: '0' }
@@ -99,4 +107,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { copyWorkflowPackage, shouldInclude, uploadWorkflow };
+module.exports = { copyWorkflowPackage, getWorkflowCliInvocation, shouldInclude, uploadWorkflow };

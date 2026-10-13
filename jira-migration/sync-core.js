@@ -33,6 +33,10 @@ const {
 } = require('./link-normalization');
 const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
+const { syncWorklogs } = require('./worklog-sync-service');
+const { getWorklogSyncDecision } = require('./worklog-sync-decision');
+const { describeError } = require('./error-message');
+const { buildWorklogQuery } = require('./worklog-request');
 const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
@@ -193,6 +197,76 @@ const getJiraEstimation = (issue) => {
     return issue.fields.Estimation.minutes + 'm';
   }
   return null;
+};
+
+const createWorklogDependencies = connection => ({
+  fetchJiraWorklogs: jiraKey => {
+    const worklogs = [];
+    let startAt = 0;
+    let total = 0;
+    do {
+      const response = connection.getSync(
+        '/issue/' + encodeURIComponent(jiraKey) + '/worklog',
+        buildWorklogQuery(startAt)
+      );
+      if (!response || response.code !== 200) {
+        throw new Error('unable to list existing Jira worklogs: ' + (response ? response.response : 'No response'));
+      }
+      const page = JSON.parse(response.response);
+      const pageWorklogs = page.worklogs || [];
+      pageWorklogs.forEach(worklog => worklogs.push(worklog));
+      total = page.total || 0;
+      if (pageWorklogs.length === 0) break;
+      startAt += pageWorklogs.length;
+    } while (startAt < total);
+    return worklogs;
+  },
+  createJiraWorklog: (jiraKey, payload) => {
+    const response = connection.postSync('/issue/' + encodeURIComponent(jiraKey) + '/worklog', {}, JSON.stringify(payload));
+    if (!response || response.code !== 201) {
+      throw new Error(response ? response.response : 'No response');
+    }
+  }
+});
+
+const countWorkItems = issue => {
+  let count = 0;
+  if (issue.workItems && typeof issue.workItems.forEach === 'function') {
+    issue.workItems.forEach(() => { count += 1; });
+  }
+  return count;
+};
+
+const syncOnlyWorklogs = (issue, ctx, collector) => {
+  const log = message => {
+    console.log(message);
+    if (collector) collector.push(message);
+  };
+  const decision = getWorklogSyncDecision(
+    issue,
+    ctx.settings,
+    evaluateSyncDecision(issue, ctx.settings)
+  );
+
+  if (!decision.canSync) {
+    log('[Jira Sync] Worklog synchronization skipped: ' + decision.reason + '.');
+    return { skipped: true, reason: decision.reason };
+  }
+  if (decision.isDryRun) {
+    const count = countWorkItems(issue);
+    log('[Jira Sync][DRY-RUN] Would synchronize up to ' + count + ' YouTrack worklogs.');
+    return { dryRun: true, planned: count };
+  }
+
+  const connection = createJiraConnection(http, ctx.settings, 2000, '2');
+  connection.addHeader('Content-Type', 'application/json');
+  try {
+    return syncWorklogs(issue, decision.jiraKey, createWorklogDependencies(connection), log);
+  } catch (error) {
+    const errorMsg = describeError(error);
+    log('[Jira Sync] Worklog synchronization failed: ' + errorMsg);
+    return { failed: true, errorMsg };
+  }
 };
 
 const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
@@ -517,6 +591,21 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
         log('[Jira Sync][DRY-RUN] Would migrate comment: "' + preview + '"');
       }
     });
+  }
+
+  // Worklog sync is opt-in because it creates independent Jira time entries.
+  // The source ID is stored in a Jira worklog property so later syncs are idempotent.
+  if (ctx.settings.worklogSyncMode === 'Enabled') {
+    if (isDryRun) {
+      const count = issue.workItems && typeof issue.workItems.size === 'number' ? issue.workItems.size : 0;
+      log('[Jira Sync][DRY-RUN] Would synchronize up to ' + count + ' YouTrack worklogs.');
+    } else {
+      try {
+        syncWorklogs(issue, resolvedJiraKey, createWorklogDependencies(connection), log);
+      } catch (error) {
+        log('[Jira Sync] Worklog synchronization skipped without reverting issue sync: ' + describeError(error));
+      }
+    }
   }
 
   // --- TRANSITION STATUS IF NEEDED ---
@@ -914,4 +1003,4 @@ const applyJiraMentionMapping = (src, settings) => {
   return text;
 };
 
-module.exports = { performSync, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };
+module.exports = { performSync, syncOnlyWorklogs, checkJiraStatus, notifyChannel, buildSlackMessage, buildTeamsMessage, getSubtasksToSync };

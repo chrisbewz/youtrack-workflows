@@ -55,6 +55,7 @@ Subtasks are evaluated independently.
 |---|---|---|
 | `jira-migration.js` | Issue change | Syncs reported issues when a mapped field, tag, version field, or sync setting changes. |
 | `jira-migration-action.js` | **Sync to Jira** | Runs a full manual sync for a reported issue. |
+| `jira-worklog-sync-action.js` | **Sync Jira Worklogs** | Exports YouTrack work items without syncing other issue fields. |
 | `jira-migration-check-action.js` | **Check Jira Status** | Reads the linked Jira status and updates `Jira State`. |
 | `jira-link-sync-action.js` | **Sync Jira Links** | Reconciles mapped links for the selected issue and immediate children. |
 | `jira-label-sync-action.js` | **Sync Jira Labels** | Adds Jira labels as YouTrack tags, creating missing tags when authorized. |
@@ -99,6 +100,7 @@ webhook and topic URLs as secrets.
 | Area | Settings |
 |---|---|
 | Target and execution | `jiraProjectSlug`, `syncMode`, `overrideCompleted` |
+| Worklog synchronization | `worklogSyncMode` |
 | Issue type mapping | `epicItemType`, `storyItemType`, `taskItemType`, `subTaskItemType` |
 | Priority mapping | `priorityHighestName`, `priorityHighName`, `priorityMediumName`, `priorityLowName` and their Jira counterparts |
 | State mapping | `statusDoneStates`, `statusInProgressStates` |
@@ -117,6 +119,12 @@ and must declare either `symmetric: true` or `jiraSide: "outward"` / `"inward"`.
 ```
 
 ## Important limitations
+
+### Worklog synchronization
+
+Worklog synchronization is opt-in through the project-level `worklogSyncMode` setting. When enabled, new YouTrack work items are exported as Jira worklogs with their duration, date, text, author login, and work-item type. The workflow records a source identifier in a Jira worklog property and skips entries it has already exported. It never updates or deletes Jira worklogs.
+
+The **Sync Jira Worklogs** action runs this export independently. It honors the effective Jira sync mode, including `Dry-Run`.
 
 - Jira priority and issue type names must match the Jira project exactly.
 - Comments are migrated only when a Jira issue is created, avoiding duplicate
