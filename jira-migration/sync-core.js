@@ -17,7 +17,12 @@ const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const { getJiraStatus, getJiraIssueType, getJiraPriority, isJiraStatusClosed } = require('./sync-mappings');
-const { evaluateSyncDecision, getFieldValueName, getSubtasksToSync } = require('./sync-decisions');
+const {
+  evaluateSyncDecision,
+  getFieldValueName,
+  getSubtaskParentSyncPlan,
+  getSubtasksToSync
+} = require('./sync-decisions');
 const {
   getYouTrackVersionNames,
   buildVersionPlan,
@@ -269,7 +274,7 @@ const syncOnlyWorklogs = (issue, ctx, collector) => {
   }
 };
 
-const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
+const buildJiraPayload = (issue, components, mappings, projectKey, ctx, parentJiraKey) => {
   const payload = {
     fields: {
       project: { key: projectKey },
@@ -291,6 +296,10 @@ const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
       originalEstimate: mappings.estimation,
       remainingEstimate: mappings.estimation
     };
+  }
+
+  if (parentJiraKey) {
+    payload.fields.parent = { key: parentJiraKey };
   }
 
   Object.keys(mappings.versionFields || {}).forEach(fieldId => {
@@ -381,6 +390,50 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
   }
 
   const JIRA_PROJECT_KEY = jiraProjectSlug;
+  const syncContext = referenceContext || { visiting: {}, hierarchyVisiting: {} };
+
+  // Jira requires a parent key when creating a Sub-task. Resolve (and, when needed,
+  // synchronize) the YouTrack parent before building this issue's Jira payload.
+  const subtaskParentPlan = getSubtaskParentSyncPlan(issue, ctx.settings);
+  if (subtaskParentPlan.reason) {
+    log('[Jira Sync] ' + subtaskParentPlan.reason + '. Skipping issue: ' + issue.id);
+    syncResult.errorMsg = subtaskParentPlan.reason;
+    return syncResult;
+  }
+
+  let parentJiraKey = subtaskParentPlan.parentJiraKey;
+  if (subtaskParentPlan.needsParentSync) {
+    if (!syncContext.hierarchyVisiting) syncContext.hierarchyVisiting = {};
+    if (syncContext.hierarchyVisiting[issue.id]) {
+      const reason = 'hierarquia de subtarefas circular';
+      log('[Jira Sync] ' + reason + '. Skipping issue: ' + issue.id);
+      syncResult.errorMsg = reason;
+      return syncResult;
+    }
+
+    syncContext.hierarchyVisiting[issue.id] = true;
+    try {
+      const parentResult = performSync(
+        subtaskParentPlan.parent,
+        ctx,
+        'Parent of subtask ' + issue.id,
+        true,
+        collector,
+        syncContext
+      );
+      parentJiraKey = getFieldValueName(subtaskParentPlan.parent.fields['Jira ID']) ||
+        (syncDecision.isDryRun && parentResult.operation === 'created' ? 'DRY-RUN-PARENT-KEY' : null);
+    } finally {
+      delete syncContext.hierarchyVisiting[issue.id];
+    }
+
+    if (!parentJiraKey) {
+      const reason = 'issue pai não sincronizada';
+      log('[Jira Sync] ' + reason + '. Postponing subtask: ' + issue.id);
+      syncResult.errorMsg = reason;
+      return syncResult;
+    }
+  }
 
   // --- TRIGGER SUMMARY ---
   log('[Jira Sync] Triggered for issue: ' + issue.id + ' | Mode: ' + syncMode + ' | Issue Sync Mode: ' + issueSyncMode);
@@ -406,7 +459,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
   const referenceResult = syncReferencedTargets(issue, {
     lookup: id => entities.Issue.findById(id),
     isDryRun: syncDecision.isDryRun,
-    context: referenceContext || { visiting: {} },
+    context: syncContext,
     additionalTargets: unresolvedLinkedTargets,
     syncTarget: (target, chain) => performSync(
       target,
@@ -492,7 +545,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
       ? getJiraComponents(issue, connection, JIRA_PROJECT_KEY, log)
       : 'skipped in dry-run';
 
-  const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY, ctx);
+  const jiraPayload = buildJiraPayload(issue, jiraComponents, mappings, JIRA_PROJECT_KEY, ctx, parentJiraKey);
 
   if (isDryRun) {
     log('[Jira Sync][DRY-RUN] Full Jira payload: ' + JSON.stringify(jiraPayload, null, 2));

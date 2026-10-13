@@ -9,6 +9,51 @@ const getParentIssue = issue => {
   return parentLink && typeof parentLink.first === 'function' ? parentLink.first() : null;
 };
 
+const getSubtaskParentSyncPlan = (issue, settings) => {
+  const subtaskType = settings.subTaskItemType || 'Subtask';
+  const issueType = getFieldValueName(issue.fields && issue.fields.Type);
+  if (issueType !== subtaskType) {
+    return {
+      isSubtask: false,
+      parent: null,
+      parentJiraKey: null,
+      needsParentSync: false,
+      reason: null
+    };
+  }
+
+  const parent = getParentIssue(issue);
+  if (!parent) {
+    return {
+      isSubtask: true,
+      parent: null,
+      parentJiraKey: null,
+      needsParentSync: false,
+      reason: 'subtarefa sem issue pai'
+    };
+  }
+
+  const sameProject = !issue.project || !parent.project || issue.project.id === parent.project.id;
+  if (!sameProject) {
+    return {
+      isSubtask: true,
+      parent,
+      parentJiraKey: null,
+      needsParentSync: false,
+      reason: 'issue pai pertence a outro projeto'
+    };
+  }
+
+  const parentJiraKey = getFieldValueName(parent.fields && parent.fields['Jira ID']);
+  return {
+    isSubtask: true,
+    parent,
+    parentJiraKey: parentJiraKey || null,
+    needsParentSync: !parentJiraKey,
+    reason: null
+  };
+};
+
 const evaluateSyncDecision = (issue, settings) => {
   const syncMode = settings.syncMode || 'Disabled';
   const issueSyncMode = getFieldValueName(issue.fields && issue.fields['Jira Sync']) || 'Enabled';
@@ -48,4 +93,4 @@ const getSubtasksToSync = issue => {
   return children;
 };
 
-module.exports = { evaluateSyncDecision, getFieldValueName, getSubtasksToSync };
+module.exports = { evaluateSyncDecision, getFieldValueName, getSubtaskParentSyncPlan, getSubtasksToSync };

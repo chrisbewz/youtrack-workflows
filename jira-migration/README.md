@@ -49,6 +49,16 @@ When Jira reports a done status category, the workflow sets `Jira State` to
 `Closed` and suppresses later writes unless `overrideCompleted` is enabled.
 Subtasks are evaluated independently.
 
+### Subtask hierarchy
+
+An issue whose `Type` matches `subTaskItemType` is created or updated as a Jira
+`Sub-task`. Its YouTrack `subtask of` parent must belong to the same project.
+When the parent has no `Jira ID`, the workflow synchronizes the parent first.
+The child payload then sets `fields.parent.key` to that Jira key. If the parent
+cannot be synchronized, the child is skipped for retry by a later change,
+manual sync, or scheduled bulk sync. Cross-project parent links and circular
+subtask hierarchies are skipped safely.
+
 ## Rules and actions
 
 | Rule | Trigger or command | Behavior |
