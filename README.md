@@ -80,6 +80,7 @@ The following custom fields must exist in every YouTrack project where the workf
 | `Jira ID` | String | Stores the Jira issue key after first sync (e.g. `PROJ-42`). Set automatically. |
 | `Jira State` | Enum | `Open`, `Closed`. Reflects the Jira-side status category. Set automatically. |
 | `Jira Sync` | Enum | `Enabled`, `Dry-Run`, `Disabled`. Per-issue override of the project sync mode. |
+| `Sync Subtasks` | Enum | `Enabled`, `Disabled`. On a parent issue, controls synchronization of its direct subtasks. |
 | `Jira Attachment Sync` | Enum | Optional per-issue opt-in. Only `Enabled` uploads newly added attachments to Jira. |
 | `Jira Link Sync` | Enum | Optional per-issue link mode: `Disabled`, `Dry-Run`, `Additive`, `Bidirectional`. |
 | `Jira Link Snapshot` | String | Stores the last converged link state. Required for non-dry-run link sync. |
@@ -267,6 +268,10 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 - The project-configured version field, when `youtrackVersionFieldName` is set
 - `becomesReported` (new issue)
 
+### Subtask hierarchy
+
+When a YouTrack issue has `Type` equal to `subTaskItemType`, the workflow creates it in Jira as a `Sub-task`. Its `subtask of` parent must be in the same YouTrack project. If that parent does not yet have a `Jira ID`, the workflow synchronizes the parent first and then creates the child with `fields.parent.key` set to the resulting Jira key. If the parent cannot be synchronized, the child is skipped and will be retried by a later change, manual sync, or scheduled bulk sync.
+
 ### Version mapping
 
 Version synchronization is opt-in. When `youtrackVersionFieldName` is configured, the workflow reads that single- or multi-value YouTrack field and lists the versions available in the target Jira project. Matching names are written by ID to `jiraVersionFieldId`. Values without a matching editable Jira version field/value use a managed label such as `yt-version-release-3`.
@@ -362,7 +367,7 @@ Automatic pre-creation of unresolved structured link targets is limited to the s
 Jira rejects payloads with unknown priority or issue type names. Values must match exactly what is configured in the target Jira project. Use the `priorityXxxNameJira` settings to align names when they differ from the defaults.
 
 ### Sub-tasks bypass the suppression guard
-Issues with `Type` matching `subTaskItemType` are always synced regardless of the `Jira Closed` / `overrideCompleted` state. This is intentional but may cause unexpected updates if sub-tasks are closed in Jira directly.
+Issues with `Type` matching `subTaskItemType` are always synced regardless of the `Jira Closed` / `overrideCompleted` state. This is intentional but may cause unexpected updates if sub-tasks are closed in Jira directly. A Jira sub-task must remain in the same project as its parent, so cross-project `subtask of` links are skipped.
 
 ### YouTrack Cloud — no server log access
 In YouTrack Cloud, `console.log` output is not accessible to workflow authors. Enable `verboseNotify` and configure a notification channel to observe sync results.
