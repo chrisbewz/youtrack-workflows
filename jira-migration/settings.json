@@ -2,9 +2,17 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "jiraAuthMode": {
+      "title": "Jira Authentication Mode",
+      "description": "Basic keeps the existing email-and-token credential format. Scoped token uses an Atlassian service-account token through the API gateway and requires Jira Cloud ID.",
+      "type": "string",
+      "x-scope": "GLOBAL",
+      "enum": ["Basic", "Scoped token"],
+      "default": "Basic"
+    },
     "jiraApiToken": {
-      "title": "Jira API Token (Basic Auth)",
-      "description": "Jira API token with permissions to access issues via REST API. Generate at https://id.atlassian.com/manage-profile/security/api-tokens.",
+      "title": "Jira API Credential",
+      "description": "For Basic mode, Base64(email:api-token). For Scoped token mode, the raw service-account API token. Generate and manage credentials at https://id.atlassian.com/manage-profile/security/api-tokens.",
       "type": "string",
       "x-scope": "GLOBAL"
     },
@@ -14,6 +22,12 @@
       "type": "string",
       "x-scope": "GLOBAL",
       "examples": ["https://your-company.atlassian.net"]
+    },
+    "jiraCloudId": {
+      "title": "Jira Cloud ID (Scoped token mode)",
+      "description": "Cloud ID used by the Atlassian API gateway when Jira Authentication Mode is Scoped token. Find the value after /s/ in the Atlassian Administration URL. Leave blank for Basic mode.",
+      "type": "string",
+      "x-scope": "GLOBAL"
     },
     "youtrackBaseUrl": {
       "title": "YouTrack URL",

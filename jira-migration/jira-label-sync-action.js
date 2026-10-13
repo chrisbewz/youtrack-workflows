@@ -3,6 +3,7 @@ const http = require('@jetbrains/youtrack-scripting-api/http');
 const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const { getFieldValueName } = require('./sync-decisions');
 const { isLabelSyncEligible, syncJiraLabels } = require('./label-sync-service');
+const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
 
 // Jira Get issue endpoint and YouTrack tag endpoints:
 // https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-get
@@ -26,7 +27,7 @@ const parseResponse = (response, acceptedCodes, operation) => {
 
 const createDependencies = ctx => {
   const settings = ctx.settings;
-  const jira = createConnection(settings.jiraEndpointUrl + '/rest/api/3', 'Basic ' + settings.jiraApiToken);
+  const jira = createJiraConnection(http, settings, 5000);
   const youtrack = createConnection(settings.youtrackBaseUrl + '/api', 'Bearer ' + settings.youtrackApiToken);
   const issueId = ctx.issue.id;
   const currentTagNames = [];
@@ -67,8 +68,9 @@ exports.rule = entities.Issue.action({
   guard: ctx => isLabelSyncEligible(ctx.issue),
   action: ctx => {
     try {
-      workflow.check(!!ctx.settings.jiraEndpointUrl && !!ctx.settings.jiraApiToken,
-        'Configure jiraEndpointUrl e jiraApiToken antes de sincronizar labels.');
+      const jiraConfigurationError = getJiraConfigurationError(ctx.settings);
+      workflow.check(!jiraConfigurationError,
+        jiraConfigurationError || 'Configure Jira authentication before synchronizing labels.');
       workflow.check(!!ctx.settings.youtrackBaseUrl && !!ctx.settings.youtrackApiToken,
         'Configure youtrackBaseUrl e youtrackApiToken antes de sincronizar labels.');
 
