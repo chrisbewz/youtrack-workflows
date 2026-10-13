@@ -33,6 +33,7 @@ const {
 } = require('./link-normalization');
 const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
+const { syncWorklogs } = require('./worklog-sync-service');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -193,6 +194,37 @@ const getJiraEstimation = (issue) => {
   }
   return null;
 };
+
+const createWorklogDependencies = connection => ({
+  fetchJiraWorklogs: jiraKey => {
+    const worklogs = [];
+    let startAt = 0;
+    let total = 0;
+    do {
+      const response = connection.getSync('/issue/' + encodeURIComponent(jiraKey) + '/worklog', {
+        expand: 'properties',
+        startAt,
+        maxResults: 1000
+      });
+      if (!response || response.code !== 200) {
+        throw new Error('unable to list existing Jira worklogs: ' + (response ? response.response : 'No response'));
+      }
+      const page = JSON.parse(response.response);
+      const pageWorklogs = page.worklogs || [];
+      pageWorklogs.forEach(worklog => worklogs.push(worklog));
+      total = page.total || 0;
+      if (pageWorklogs.length === 0) break;
+      startAt += pageWorklogs.length;
+    } while (startAt < total);
+    return worklogs;
+  },
+  createJiraWorklog: (jiraKey, payload) => {
+    const response = connection.postSync('/issue/' + encodeURIComponent(jiraKey) + '/worklog', {}, JSON.stringify(payload));
+    if (!response || response.code !== 201) {
+      throw new Error(response ? response.response : 'No response');
+    }
+  }
+});
 
 const buildJiraPayload = (issue, components, mappings, projectKey, ctx) => {
   const payload = {
@@ -518,6 +550,21 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
         log('[Jira Sync][DRY-RUN] Would migrate comment: "' + preview + '"');
       }
     });
+  }
+
+  // Worklog sync is opt-in because it creates independent Jira time entries.
+  // The source ID is stored in a Jira worklog property so later syncs are idempotent.
+  if (ctx.settings.worklogSyncMode === 'Enabled') {
+    if (isDryRun) {
+      const count = issue.workItems && typeof issue.workItems.size === 'number' ? issue.workItems.size : 0;
+      log('[Jira Sync][DRY-RUN] Would synchronize up to ' + count + ' YouTrack worklogs.');
+    } else {
+      try {
+        syncWorklogs(issue, resolvedJiraKey, createWorklogDependencies(connection), log);
+      } catch (error) {
+        log('[Jira Sync] Worklog synchronization skipped without reverting issue sync: ' + error.message);
+      }
+    }
   }
 
   // --- TRANSITION STATUS IF NEEDED ---

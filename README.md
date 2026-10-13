@@ -43,6 +43,7 @@ YouTrack issue change
         ├─ POST /rest/api/2/issue          → CREATE (no Jira ID yet)
         │  or PUT /rest/api/2/issue/{key}  → UPDATE (Jira ID already set)
         ├─ Migrates comments               (CREATE only, to avoid duplicates)
+        ├─ Migrates worklogs               (optional; idempotent by YouTrack work-item ID)
         ├─ POST /rest/api/2/issue/{key}/transitions  → status transition
         └─ notifyChannel()  → ntfy / Teams / Slack
 ```
@@ -162,6 +163,7 @@ All settings are configured per-project in YouTrack's workflow settings UI after
 |---|---|---|
 | `jiraProjectSlug` | Key of the target Jira project (e.g. `PROJ`). | ✅ |
 | `syncMode` | `Enabled`, `Dry-Run`, or `Disabled`. Controls sync for all issues in the project. | ✅ |
+| `worklogSyncMode` | `Disabled` (default) or `Enabled`. Exports YouTrack work items as Jira worklogs. | ✗ |
 | `overrideCompleted` | When `true`, syncs issues even if `Jira State` is `Closed`. Default: `false`. | ✗ |
 | `linkSyncMode` | Link synchronization default: `Disabled`, `Dry-Run`, `Additive`, or `Bidirectional`. Default: `Disabled`. | ✗ |
 | `linkTypeMappingJson` | JSON mapping YouTrack link directions to Jira link types and sides. Default: `{}`. | ✗ |
@@ -260,6 +262,7 @@ Sync mode is evaluated at two levels. The **project-level** `syncMode` setting i
 - `summary`, `description`
 - `State`, `Priority`, `Type`, `Estimation`, `Subsystem`
 - Tags
+- Added, edited, or removed work items, when `worklogSyncMode` is `Enabled`
 - The project-configured version field, when `youtrackVersionFieldName` is set
 - `becomesReported` (new issue)
 
@@ -278,6 +281,14 @@ The `Sync Jira Labels` action is available only on reported issues with `Jira Sy
 Attachment synchronization is opt-in per issue through `Jira Attachment Sync: Enabled`. It only runs when the effective Jira sync mode is `Enabled` and the issue already has a `Jira ID`. Newly added files are uploaded directly from the YouTrack `InputStream` to Jira as multipart data after applying the configured size and MIME filters.
 
 This first iteration does not delete Jira attachments when a YouTrack attachment is removed. Replacing a file is treated as a new upload, since attachments are immutable and Jira attachment deletion would require persistent ID mapping.
+
+### Worklog synchronization
+
+Worklog synchronization is disabled by default. Set the project-level `worklogSyncMode` to `Enabled` to export each YouTrack work item as a Jira worklog. The work item's duration, assigned date, and description map to Jira's `timeSpentSeconds`, `started`, and `comment` fields. Its YouTrack ID, author login, and work-item type are kept in a Jira worklog property named `youtrack-work-item`.
+
+Before creating worklogs, the workflow reads the Jira worklogs (including properties) and skips any whose source work-item ID was exported previously. A failed worklog is logged and does not revert the issue synchronization or prevent the remaining worklogs from being attempted. Jira records the API-token user as the worklog author; the YouTrack author is retained as metadata because the Jira API does not accept an author override for this operation.
+
+This is intentionally one-way and additive: editing or removing a YouTrack work item triggers a reconciliation pass but does not alter or delete the corresponding Jira worklog. This prevents accidental deletion of time entries; updates and deletions can be added later with explicit Jira worklog-ID mapping and permissions.
 
 ### Issue references and dependencies
 

@@ -2,6 +2,8 @@ const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const syncCore = require('./sync-core');
 const { hasVersionFieldChanged } = require('./version-mapping');
 
+const collectionHasItems = collection => collection && typeof collection.isNotEmpty === 'function' && collection.isNotEmpty();
+
 /**
  * onChange rule — Syncs a YouTrack issue to Jira whenever a mapped field changes.
  * Core sync logic lives in sync-core.js and is shared with the action and schedule rules.
@@ -27,6 +29,9 @@ const shouldEvalRule = (ctx) => {
     issue.tags.isChanged                        ||
     !!(jiraSync && jiraSync.isChanged)           ||
     !!(syncSubtasks && syncSubtasks.isChanged)   ||
+    collectionHasItems(issue.workItems && issue.workItems.added) ||
+    collectionHasItems(issue.workItems && issue.workItems.removed) ||
+    collectionHasItems(issue.editedWorkItems)    ||
     hasVersionFieldChanged(issue, ctx.settings);
 };
 
@@ -82,6 +87,12 @@ const buildChangeSummary = (issue, settings) => {
   const syncSubtasks = issue.fields['Sync Subtasks'];
   if (syncSubtasks && syncSubtasks.isChanged) {
     changes.push('Sync Subtasks → "' + (syncSubtasks.presentation || syncSubtasks.name || syncSubtasks) + '"');
+  }
+
+  if (collectionHasItems(issue.workItems && issue.workItems.added) ||
+      collectionHasItems(issue.workItems && issue.workItems.removed) ||
+      collectionHasItems(issue.editedWorkItems)) {
+    changes.push('Work items changed');
   }
 
 
