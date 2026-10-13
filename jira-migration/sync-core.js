@@ -36,6 +36,7 @@ const { createLinkDependencies } = require('./jira-link-runtime');
 const { syncWorklogs } = require('./worklog-sync-service');
 const { getWorklogSyncDecision } = require('./worklog-sync-decision');
 const { describeError } = require('./error-message');
+const { buildWorklogQuery } = require('./worklog-request');
 
 // --- NOTIFICATION MESSAGE BUILDERS ---
 
@@ -203,11 +204,10 @@ const createWorklogDependencies = connection => ({
     let startAt = 0;
     let total = 0;
     do {
-      const response = connection.getSync('/issue/' + encodeURIComponent(jiraKey) + '/worklog', {
-        expand: 'properties',
-        startAt,
-        maxResults: 1000
-      });
+      const response = connection.getSync(
+        '/issue/' + encodeURIComponent(jiraKey) + '/worklog',
+        buildWorklogQuery(startAt)
+      );
       if (!response || response.code !== 200) {
         throw new Error('unable to list existing Jira worklogs: ' + (response ? response.response : 'No response'));
       }
