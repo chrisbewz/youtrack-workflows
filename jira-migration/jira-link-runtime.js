@@ -1,11 +1,11 @@
 const http = require('@jetbrains/youtrack-scripting-api/http');
 const search = require('@jetbrains/youtrack-scripting-api/search');
+const { createJiraConnection: createAuthenticatedJiraConnection } = require('./jira-auth');
 
 // Jira Cloud issue-link endpoints:
 // https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-links/
 const createJiraConnection = settings => {
-  const connection = new http.Connection(settings.jiraEndpointUrl + '/rest/api/3', null, 5000);
-  connection.addHeader('Authorization', 'Basic ' + settings.jiraApiToken);
+  const connection = createAuthenticatedJiraConnection(http, settings, 5000);
   connection.addHeader('Content-Type', 'application/json');
   connection.addHeader('Accept', 'application/json');
   return connection;

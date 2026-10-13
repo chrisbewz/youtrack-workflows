@@ -7,6 +7,7 @@ const {
   buildReconciliationPlan,
   evaluateArticleSync
 } = require('./article-sync-service');
+const { createJiraConnection: createAuthenticatedJiraConnection, getJiraConfigurationError } = require('./jira-auth');
 
 // Extension properties provide app-owned persistence without requiring custom fields.
 // https://www.jetbrains.com/help/youtrack/devportal/apps-extension-properties.html
@@ -29,8 +30,7 @@ const resolveFiles = (description, prefix) => {
 };
 
 const createJiraConnection = settings => {
-  const connection = new http.Connection(settings.jiraEndpointUrl + '/rest/api/3', null, 15000);
-  connection.addHeader('Authorization', 'Basic ' + settings.jiraApiToken);
+  const connection = createAuthenticatedJiraConnection(http, settings, 15000);
   connection.addHeader('Accept', 'application/json');
   connection.addHeader('X-Atlassian-Token', 'no-check');
   return connection;
@@ -104,8 +104,9 @@ const syncIssueArticles = (issue, settings) => {
     return { status: 'dry-run', plan, missing: resolved.missing };
   }
 
-  if (!settings.jiraEndpointUrl || !settings.jiraApiToken) {
-    throw new Error('configure jiraEndpointUrl e jiraApiToken antes da sincronização de artigos');
+  const jiraConfigurationError = getJiraConfigurationError(settings);
+  if (jiraConfigurationError) {
+    throw new Error(jiraConfigurationError);
   }
 
   const connection = createJiraConnection(settings);

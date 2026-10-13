@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "includeSubtasks": {
+      "title": "Include subtasks",
+      "description": "Recursively includes subtasks in deterministic pre-order.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeTaskRelationDiagram": {
+      "title": "Include task relation diagram",
+      "description": "Adds a Mermaid diagram for relations among exported tasks.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeFields": {
+      "title": "Include fields",
+      "description": "Adds configured issue fields to each exported task.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "includeTags": {
+      "title": "Include tags",
+      "description": "Adds issue tags to each exported task.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    },
+    "separateFilesForMultipleTasks": {
+      "title": "Separate files for multiple tasks",
+      "description": "Enables a separate Markdown file inside the ZIP download when multiple tasks are exported.",
+      "type": "boolean",
+      "x-scope": "PROJECT",
+      "default": false
+    }
+  }
+}
