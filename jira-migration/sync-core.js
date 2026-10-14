@@ -40,6 +40,14 @@ const { syncIssueLinks } = require('./link-sync-service');
 const { createLinkDependencies } = require('./jira-link-runtime');
 const { syncWorklogs } = require('./worklog-sync-service');
 const { getWorklogSyncDecision } = require('./worklog-sync-decision');
+const {
+  isAttachmentSyncEnabled,
+  hasReservedLabel,
+  toArray,
+  buildUploadPlan
+} = require('./attachment-sync-service');
+const { fetchJiraAttachments, uploadAttachments } = require('./attachment-sync-runtime');
+const { getJiraLabels } = require('./jira-label-mapping');
 const { describeError } = require('./error-message');
 const { buildWorklogQuery } = require('./worklog-request');
 const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
@@ -167,15 +175,6 @@ const buildTeamsMessage = (syncResult) => {
   return { themeColor, title, subtitle, text };
 };
 
-const getJiraLabels = (issue) => {
-  const jiraLabels = [];
-  issue.tags.forEach(tag => {
-    // Jira labels cannot contain spaces
-    jiraLabels.push(tag.name.replace(/\s+/g, '-'));
-  });
-  return jiraLabels;
-};
-
 const getJiraComponents = (issue, connection, projectKey, log) => {
   let jiraComponents = [];
   if (issue.fields.Subsystem) {
@@ -233,6 +232,24 @@ const createWorklogDependencies = connection => ({
     }
   }
 });
+
+const syncExistingAttachments = (issue, jiraKey, settings, connection, log, isDryRun) => {
+  if (!isAttachmentSyncEnabled(settings)) return;
+  if (hasReservedLabel(issue, settings)) {
+    log('[Jira Sync] Attachment synchronization skipped: reserved label present.');
+    return;
+  }
+
+  const attachments = toArray(issue.attachments);
+  const existing = isDryRun ? [] : fetchJiraAttachments(connection, jiraKey);
+  const plan = buildUploadPlan(attachments, settings, existing);
+  if (isDryRun) {
+    log('[Jira Sync][DRY-RUN] Would synchronize ' + plan.uploads.length + ' YouTrack attachments.');
+    return;
+  }
+  if (plan.uploads.length > 0) uploadAttachments(connection, jiraKey, plan.uploads);
+  log('[Jira Sync] Attachments: uploaded ' + plan.uploads.length + ', skipped ' + plan.skipped.length + '.');
+};
 
 const countWorkItems = issue => {
   let count = 0;
@@ -325,7 +342,7 @@ const buildJiraPayload = (issue, components, mappings, projectKey, ctx, parentJi
  *                                   to console.log, so the caller can display them in the UI.
  * @param {Object}   [referenceContext] - Recursion guard shared while referenced issues are created.
  */
-const performSync = (issue, ctx, triggerReason, stateChanged, collector, referenceContext) => {
+const performSync = (issue, ctx, triggerReason, stateChanged, collector, referenceContext, includeExistingAttachments) => {
   // log() writes to console always, and also pushes to the collector when provided.
   // This allows the action rule to surface log output via workflow.message() in YouTrack Cloud,
   // where server-side console logs are not accessible to users.
@@ -484,7 +501,7 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
     status:     getJiraStatus(issue, ctx.settings),
     issueType:  getJiraIssueType(issue, ctx.settings),
     priority:   getJiraPriority(issue, ctx.settings),
-    labels:     getJiraLabels(issue),
+    labels:     getJiraLabels(issue, ctx.settings),
     estimation: getJiraEstimation(issue)
   };
 
@@ -644,6 +661,14 @@ const performSync = (issue, ctx, triggerReason, stateChanged, collector, referen
         log('[Jira Sync][DRY-RUN] Would migrate comment: "' + preview + '"');
       }
     });
+  }
+
+  if (includeExistingAttachments) {
+    try {
+      syncExistingAttachments(issue, resolvedJiraKey, ctx.settings, connection, log, isDryRun);
+    } catch (error) {
+      log('[Jira Sync] Attachment synchronization skipped without reverting issue sync: ' + describeError(error));
+    }
   }
 
   // Worklog sync is opt-in because it creates independent Jira time entries.

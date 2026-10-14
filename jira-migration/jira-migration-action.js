@@ -36,7 +36,7 @@ exports.rule = entities.Issue.action({
     const needsCollector = verboseNotify || hasExternalChannel;
     const collector = needsCollector ? [] : null;
 
-    const syncResult = syncCore.performSync(ctx.issue, ctx, 'Manual sync requested by ' + user, true, collector);
+    const syncResult = syncCore.performSync(ctx.issue, ctx, 'Manual sync requested by ' + user, true, collector, null, true);
 
     if (collector && collector.length > 0) {
       // Surface logs in the YouTrack UI as a notification popup.
