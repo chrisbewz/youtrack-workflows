@@ -1,4 +1,5 @@
 const { getFieldValueName } = require('./sync-decisions');
+const { getReservedLabelNames } = require('./attachment-sync-service');
 
 const isLabelSyncEligible = issue => !!issue &&
   issue.isReported === true &&
@@ -15,10 +16,15 @@ const normalizeJiraLabels = labels => {
   return normalized;
 };
 
-const syncJiraLabels = (labels, dependencies) => {
+const filterReservedLabels = (labels, reservedLabelNames) => {
+  const reserved = getReservedLabelNames({ reservedLabelNames });
+  return normalizeJiraLabels(labels).filter(name => reserved.indexOf(name) === -1);
+};
+
+const syncJiraLabels = (labels, dependencies, reservedLabelNames) => {
   const result = { labels: 0, unchanged: 0, reused: 0, created: 0, attached: 0 };
 
-  normalizeJiraLabels(labels).forEach(name => {
+  filterReservedLabels(labels, reservedLabelNames).forEach(name => {
     result.labels += 1;
     if (dependencies.hasTag(name)) {
       result.unchanged += 1;
@@ -45,4 +51,4 @@ const syncJiraLabels = (labels, dependencies) => {
   return result;
 };
 
-module.exports = { isLabelSyncEligible, normalizeJiraLabels, syncJiraLabels };
+module.exports = { isLabelSyncEligible, normalizeJiraLabels, filterReservedLabels, syncJiraLabels };

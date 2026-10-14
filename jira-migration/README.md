@@ -29,8 +29,7 @@ are defined in [settings.json](settings.json).
 | `Estimation` | Period | Maps to Jira time tracking data. |
 
 `Subsystem` is optional and maps to a Jira component. Optional capabilities
-also use `Sync Subtasks`, `Jira Attachment Sync`, `Jira Link Sync`, and
-`Jira Link Snapshot` fields.
+also use `Sync Subtasks`, `Jira Link Sync`, and `Jira Link Snapshot` fields.
 
 ## Synchronization model
 
@@ -64,12 +63,12 @@ subtask hierarchies are skipped safely.
 | Rule | Trigger or command | Behavior |
 |---|---|---|
 | `jira-migration.js` | Issue change | Syncs reported issues when a mapped field, tag, version field, or sync setting changes. |
-| `jira-migration-action.js` | **Sync to Jira** | Runs a full manual sync for a reported issue. |
+| `jira-migration-action.js` | **Sync to Jira** | Runs a full manual sync for a reported issue, including eligible existing attachments when attachment sync is enabled. |
 | `jira-worklog-sync-action.js` | **Sync Jira Worklogs** | Exports YouTrack work items without syncing other issue fields. |
 | `jira-migration-check-action.js` | **Check Jira Status** | Reads the linked Jira status and updates `Jira State`. |
 | `jira-link-sync-action.js` | **Sync Jira Links** | Reconciles mapped links for the selected issue and immediate children. |
 | `jira-label-sync-action.js` | **Sync Jira Labels** | Adds Jira labels as YouTrack tags, creating missing tags when authorized. |
-| `jira-attachment-sync.js` | New attachment | Uploads accepted attachments for opted-in issues. |
+| `jira-attachment-sync.js` | New attachment | Uploads accepted attachments when attachment sync is enabled for the project. |
 | `jira-article-sync.js` | Description or Jira ID change | Reconciles referenced YouTrack articles as Markdown attachments. |
 | `jira-article-update-sync.js` | Article change | Updates tracked article attachments in linked Jira issues. |
 | `jira-migration-schedule.js` | Daily at 03:00 and 03:30 | Syncs unsynced reported issues, then checks the status of synced issues. |
@@ -116,7 +115,8 @@ webhook and topic URLs as secrets.
 | State mapping | `statusDoneStates`, `statusInProgressStates` |
 | Link synchronization | `linkSyncMode`, `linkTypeMappingJson` |
 | Version synchronization | `youtrackVersionFieldName`, `jiraVersionFieldId`, `versionLabelPrefix` |
-| Attachments and articles | `attachmentMaxSizeKb`, `attachmentAllowedMimeTypes`, `articleAttachmentPrefix` |
+| Attachments and articles | `attachmentSyncMode`, `attachmentMaxSizeKb`, `attachmentAllowedMimeTypes`, `articleAttachmentPrefix` |
+| Internal labels | `reservedLabelNames` |
 
 For `linkTypeMappingJson`, each YouTrack link direction maps to a Jira link type
 and must declare either `symmetric: true` or `jiraSide: "outward"` / `"inward"`.
@@ -129,6 +129,29 @@ and must declare either `symmetric: true` or `jiraSide: "outward"` / `"inward"`.
 ```
 
 ## Important limitations
+
+### Attachment synchronization
+
+Attachment synchronization is opt-in through the project-level
+`attachmentSyncMode` setting. With `Enabled`, newly added eligible files are
+uploaded automatically and **Sync to Jira** also reconciles the issue's
+existing attachments. The manual sync reads the Jira attachment inventory and
+skips files that already have the same filename and byte size there.
+
+The defaults accept files up to 5 MB with MIME types `image/png`, `image/jpeg`,
+`image/gif`, `application/pdf`, and `text/plain`. Customize the size and MIME
+allowlist per project. Attachment sync requires a linked `Jira ID`, respects
+the effective sync mode, and never performs uploads in `Dry-Run`.
+
+`reservedLabelNames` is a project-scoped, comma-separated exact label list.
+Reserved labels stay internal to YouTrack: they are excluded from the Jira
+issue payload and ignored by **Sync Jira Labels**. Any reserved label disables
+attachment synchronization for the individual issue, without requiring an
+issue custom field. The default reserved label is `jira:no-attachments`.
+
+Attachment removal in YouTrack never removes the Jira copy. A failed attachment
+upload during **Sync to Jira** is reported but does not revert an otherwise
+successful issue synchronization.
 
 ### Worklog synchronization
 
@@ -143,8 +166,8 @@ The **Sync Jira Worklogs** action runs this export independently. It honors the 
   Jira-side field changes are not copied back to YouTrack.
 - The workflow never creates Jira project versions. Values without a matching
   Jira version are represented by managed labels.
-- Attachment synchronization only uploads newly added accepted files; it does
-  not delete Jira attachments when a YouTrack attachment is removed.
+- Attachment synchronization never deletes Jira attachments when a YouTrack
+  attachment is removed.
 - In YouTrack Cloud, enable `verboseNotify` to view detailed manual-sync output.
 
 ## Development and upload

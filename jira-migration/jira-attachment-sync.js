@@ -4,6 +4,7 @@ const workflow = require('@jetbrains/youtrack-scripting-api/workflow');
 const { getFieldValueName } = require('./sync-decisions');
 const { isAttachmentSyncEligible, buildUploadPlan } = require('./attachment-sync-service');
 const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth');
+const { uploadAttachments } = require('./attachment-sync-runtime');
 
 // YouTrack provides IssueAttachment.content as an InputStream and supports it
 // directly in multipart parts:
@@ -11,22 +12,6 @@ const { createJiraConnection, getJiraConfigurationError } = require('./jira-auth
 // https://www.jetbrains.com/help/youtrack/devportal/JS-Workflow-REST-API.html
 // Jira requires a multipart part named "file" and X-Atlassian-Token: no-check:
 // https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/
-const uploadAttachments = (jiraKey, parts, settings) => {
-  const connection = createJiraConnection(http, settings, 15000);
-  connection.addHeader('Accept', 'application/json');
-  connection.addHeader('X-Atlassian-Token', 'no-check');
-
-  const response = connection.postSync(
-    '/issue/' + encodeURIComponent(jiraKey) + '/attachments',
-    {},
-    { type: 'multipart/form-data', parts }
-  );
-  if (!response || response.code !== 200) {
-    throw new Error('Upload para o Jira falhou. HTTP ' + (response ? response.code : 'sem resposta') +
-      (response && response.response ? ': ' + response.response : ''));
-  }
-};
-
 exports.rule = entities.Issue.onChange({
   title: 'Jira Attachment Sync',
   guard: ctx => isAttachmentSyncEligible(ctx.issue, ctx.settings) &&
@@ -42,7 +27,8 @@ exports.rule = entities.Issue.onChange({
       const plan = buildUploadPlan(added, ctx.settings);
 
       if (plan.uploads.length > 0) {
-        uploadAttachments(getFieldValueName(ctx.issue.fields['Jira ID']), plan.uploads, ctx.settings);
+        const connection = createJiraConnection(http, ctx.settings, 15000);
+        uploadAttachments(connection, getFieldValueName(ctx.issue.fields['Jira ID']), plan.uploads);
       }
 
       const skipped = plan.skipped.map(item => item.name + ' (' + item.reason + ')');
@@ -59,9 +45,5 @@ exports.rule = entities.Issue.onChange({
       type: entities.Field.stringType,
       name: 'Jira ID'
     },
-    'Jira Attachment Sync': {
-      type: entities.EnumField.fieldType,
-      name: 'Jira Attachment Sync'
-    }
   }
 });
