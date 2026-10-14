@@ -6,6 +6,7 @@ const path = require('node:path');
 const {
   isLabelSyncEligible,
   normalizeJiraLabels,
+  filterReservedLabels,
   syncJiraLabels
 } = require('../jira-migration/label-sync-service');
 
@@ -32,6 +33,13 @@ test('YOU-17 normalizes Jira labels by removing blanks and exact duplicates', ()
   assert.deepEqual(
     normalizeJiraLabels(['backend', '', ' backend ', 'Backend', null, 'api']),
     ['backend', 'Backend', 'api']
+  );
+});
+
+test('YOU-17 excludes configured reserved labels before attaching Jira labels', () => {
+  assert.deepEqual(
+    filterReservedLabels(['backend', 'jira:no-attachments', 'internal'], 'jira:no-attachments, private'),
+    ['backend', 'internal']
   );
 });
 

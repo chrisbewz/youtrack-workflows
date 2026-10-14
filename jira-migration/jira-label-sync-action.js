@@ -76,7 +76,7 @@ exports.rule = entities.Issue.action({
 
       const dependencies = createDependencies(ctx);
       const jiraKey = getFieldValueName(ctx.issue.fields['Jira ID']);
-      const result = syncJiraLabels(dependencies.fetchLabels(jiraKey), dependencies);
+      const result = syncJiraLabels(dependencies.fetchLabels(jiraKey), dependencies, ctx.settings.reservedLabelNames);
 
       workflow.message('Jira Label Sync | labels: ' + result.labels +
         ' | já associadas: ' + result.unchanged +

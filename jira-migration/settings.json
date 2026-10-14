@@ -171,18 +171,33 @@
     },
     "attachmentMaxSizeKb": {
       "title": "Attachment Sync Maximum Size (KB)",
-      "description": "Maximum size of each newly added attachment sent to Jira. Used only when the issue enables Jira Attachment Sync.",
+      "description": "Maximum size of each attachment sent to Jira when attachment synchronization is enabled for the project.",
       "type": "integer",
       "minimum": 1,
       "x-scope": "PROJECT",
       "default": 5120
+    },
+    "attachmentSyncMode": {
+      "title": "Jira Attachment Sync Mode",
+      "description": "Controls whether eligible issue attachments are sent to Jira. Enabled uploads newly added attachments automatically and includes existing attachments in Sync to Jira.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "enum": ["Disabled", "Enabled"],
+      "default": "Disabled"
     },
     "attachmentAllowedMimeTypes": {
       "title": "Attachment Sync Allowed MIME Types",
       "description": "Comma-separated MIME type whitelist for Jira attachment synchronization.",
       "type": "string",
       "x-scope": "PROJECT",
-      "default": "image/png,image/jpeg,application/pdf,text/plain"
+      "default": "image/png,image/jpeg,image/gif,application/pdf,text/plain"
+    },
+    "reservedLabelNames": {
+      "title": "Reserved Label Names",
+      "description": "Comma-separated exact label names kept internal to YouTrack. They are excluded from Jira label synchronization; jira:no-attachments also suppresses attachment synchronization for the issue.",
+      "type": "string",
+      "x-scope": "PROJECT",
+      "default": "jira:no-attachments"
     },
     "articleAttachmentPrefix": {
       "title": "Jira Article Attachment Prefix",
