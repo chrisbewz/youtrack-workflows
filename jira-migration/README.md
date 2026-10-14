@@ -145,9 +145,9 @@ the effective sync mode, and never performs uploads in `Dry-Run`.
 
 `reservedLabelNames` is a project-scoped, comma-separated exact label list.
 Reserved labels stay internal to YouTrack: they are excluded from the Jira
-issue payload and ignored by **Sync Jira Labels**. The default
-`jira:no-attachments` additionally disables attachment synchronization for the
-individual issue, without requiring an issue custom field.
+issue payload and ignored by **Sync Jira Labels**. Any reserved label disables
+attachment synchronization for the individual issue, without requiring an
+issue custom field. The default reserved label is `jira:no-attachments`.
 
 Attachment removal in YouTrack never removes the Jira copy. A failed attachment
 upload during **Sync to Jira** is reported but does not revert an otherwise
